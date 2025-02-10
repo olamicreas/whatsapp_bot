@@ -81,14 +81,31 @@ def generate_whatsapp_link(referral_code, name):
 
 # Function to save user to Google Sheets
 def save_to_google_sheets(phone, name, referral_code=None):
-    users = sheet.get_all_records()
+    try:
+        users = sheet.get_all_records(expected_headers=["Phone", "Name", "Referral code", "Referrals", "Heep saved?", "User saved?"])
+    except gspread.exceptions.GSpreadException:
+        users = []  # If no valid headers exist, treat as empty
+
+    # If sheet is empty, create headers
+    if not users:
+        headers = ["Phone", "Name", "Referral code", "Referrals", "Heep saved?", "User saved?"]
+        sheet.clear()  # Clear sheet to remove any hidden characters
+        sheet.append_row(headers)
+
+    # Check if the user already exists
     for user in users:
         if str(user["Phone"]).strip() == phone:
             return user["Referral code"]
+
+    # Generate a referral code if not provided
     if not referral_code:
         referral_code = generate_referral_code()
+
+    # Append new user row
     sheet.append_row([phone, name, referral_code, 0, "Pending", "Pending"])
+    
     return referral_code
+
 
 # Function to save contact in Google Contacts
 def save_to_google_contacts(name, phone):
