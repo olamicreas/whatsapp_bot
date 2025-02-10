@@ -39,7 +39,7 @@ people_service = build("people", "v1", credentials=people_creds)
 
 # ✅ Mr. Heep's phone number
 MR_HEEP_PHONE = "2347010528330"
-
+VERIFY_TOKEN = "my_verify_token"
 
 app = Flask(__name__)
 
@@ -117,35 +117,46 @@ def handle_referral_usage(referral_code, referred_phone):
         return True
     return False
 
-@app.route("/webhook", methods=["POST"])
+@app.route("/webhook", methods=["GET", "POST"])
 def whatsapp_webhook():
-    data = request.get_json()
-    print("📩 Incoming Webhook Data:", json.dumps(data, indent=2))  # Debugging
+    if request.method == "GET":
+        # WhatsApp webhook verification
+        verify_token = request.args.get("hub.verify_token")
+        challenge = request.args.get("hub.challenge")
 
-    for entry in data.get("entry", []):
-        for change in entry.get("changes", []):
-            value = change.get("value", {})
-            message_data = value.get("messages", [])
-            contacts = value.get("contacts", [])
+        if verify_token == VERIFY_TOKEN:
+            return challenge  # Return challenge to verify webhook
+        else:
+            return "Verification failed", 403
 
-            if message_data:
-                message = message_data[0]
-                sender_phone = message["from"]
-                message_text = message["text"]["body"].strip().lower()
+    elif request.method == "POST":
+        # Handle incoming messages
+        data = request.get_json()
+        print("📩 Incoming Webhook Data:", json.dumps(data, indent=2))  # Debugging
 
-                # Extract sender name from contacts
-                sender_name = contacts[0]["profile"]["name"] if contacts else "Unknown"
-                print(f"📞 Sender Phone: {sender_phone}, 👤 Sender Name: {sender_name}")
+        for entry in data.get("entry", []):
+            for change in entry.get("changes", []):
+                value = change.get("value", {})
+                message_data = value.get("messages", [])
+                contacts = value.get("contacts", [])
 
-                if message_text == "start":
-                    referral_code = save_to_google_sheets(sender_phone, sender_name)
-                    send_whatsapp_message(sender_phone, f"✅ Your referral code is: {referral_code}")
-                    send_whatsapp_message(sender_phone, f"🔗 Share this link: {generate_whatsapp_link(referral_code, sender_name)}")
+                if message_data:
+                    message = message_data[0]
+                    sender_phone = message["from"]
+                    message_text = message["text"]["body"].strip().lower()
 
-    return jsonify({"status": "success"}), 200
+                    sender_name = contacts[0]["profile"]["name"] if contacts else "Unknown"
+                    print(f"📞 Sender Phone: {sender_phone}, 👤 Sender Name: {sender_name}")
+
+                    if message_text == "start":
+                        referral_code = save_to_google_sheets(sender_phone, sender_name)
+                        send_whatsapp_message(sender_phone, f"✅ Your referral code is: {referral_code}")
+                        send_whatsapp_message(sender_phone, f"🔗 Share this link: {generate_whatsapp_link(referral_code, sender_name)}")
+
+        return jsonify({"status": "success"}), 200
 
 
-@app.route("/autoresponder", methods=["POST"])
+@app.route("/autoresponder", methods=["POST", "GET"])
 def autoresponder():
     try:
         data = request.get_json()
