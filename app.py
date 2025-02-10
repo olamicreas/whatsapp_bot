@@ -20,7 +20,14 @@ WHATSAPP_API_URL = f"https://graph.facebook.com/v21.0/{META_PHONE_NUMBER_ID}/mes
 
 # Google Sheets Setup
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("whatsapp-referral-bot.json", scope)
+creds_json = os.getenv("GOOGLE_CREDENTIALS")
+if creds_json is None:
+    raise ValueError("Missing GOOGLE_CREDENTIALS environment variable")
+
+creds_dict = json.loads(creds_json)
+creds = Credentials.from_service_account_info(creds_dict)
+
+# Authenticate with Google Sheets
 client_gs = gspread.authorize(creds)
 sheet = client_gs.open("WhatsApp Referral Bot").sheet1
 
