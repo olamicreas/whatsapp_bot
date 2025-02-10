@@ -87,7 +87,7 @@ def save_to_google_sheets(phone, name, referral_code=None):
             return user["Referral code"]
     if not referral_code:
         referral_code = generate_referral_code()
-    sheet.append_row([phone, name, referral_code, 0])
+    sheet.append_row([phone, name, referral_code, 0, "Pending", "Pending"])
     return referral_code
 
 # Function to save contact in Google Contacts
