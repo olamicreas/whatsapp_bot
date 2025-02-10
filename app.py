@@ -1,46 +1,45 @@
 from flask import Flask, request, jsonify
 import requests
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 import os
 import urllib.parse
 import re
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from google.oauth2.service_account import Credentials
-from dotenv import load_dotenv
 import json
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-# Meta WhatsApp API Setup
+# ✅ Meta WhatsApp API Setup
 META_WHATSAPP_ACCESS_TOKEN = os.getenv("META_WHATSAPP_ACCESS_TOKEN")
 META_PHONE_NUMBER_ID = os.getenv("META_PHONE_NUMBER_ID")
 WHATSAPP_API_URL = f"https://graph.facebook.com/v21.0/{META_PHONE_NUMBER_ID}/messages"
 
-# Google Sheets Setup
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+# ✅ Load Google Credentials from Environment Variable
 creds_json = os.getenv("GOOGLE_CREDENTIALS")
 if creds_json is None:
-    raise ValueError("Missing GOOGLE_CREDENTIALS environment variable")
+    raise ValueError("❌ Missing GOOGLE_CREDENTIALS environment variable")
 
 creds_dict = json.loads(creds_json)
-creds = Credentials.from_service_account_info(creds_dict)
 
-# Authenticate with Google Sheets
+# ✅ Fix OAuth Scopes for Google Sheets & Drive
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+
+# ✅ Authenticate with Google Sheets
 client_gs = gspread.authorize(creds)
 sheet = client_gs.open("WhatsApp Referral Bot").sheet1
 
-# Google People API Setup (for Google Contacts)
+# ✅ Fix Google People API (for Google Contacts)
 PEOPLE_API_SCOPES = ["https://www.googleapis.com/auth/contacts"]
-people_creds = service_account.Credentials.from_service_account_file(
-    "whatsapp-referral-bot.json", scopes=PEOPLE_API_SCOPES
-)
+people_creds = Credentials.from_service_account_info(creds_dict, scopes=PEOPLE_API_SCOPES)
 people_service = build("people", "v1", credentials=people_creds)
 
-# Mr. Heep's phone number
+# ✅ Mr. Heep's phone number
 MR_HEEP_PHONE = "2347010528330"
+
 
 app = Flask(__name__)
 
