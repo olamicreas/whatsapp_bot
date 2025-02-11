@@ -54,7 +54,7 @@ def authenticate():
     
     if not creds or not creds.valid:
         flow = InstalledAppFlow.from_client_secrets_file(
-            "/Users/abdulquayyumoyedotun/Downloads/client_secret_258863544208-vu84m7tuf9j99s10his372sobabqebjs.apps.googleusercontent.com.json", PEOPLE_API_SCOPES, redirect_uri=REDIRECT_URI
+            "client_secret_258863544208-vu84m7tuf9j99s10his372sobabqebjs.apps.googleusercontent.com.json", PEOPLE_API_SCOPES, redirect_uri=REDIRECT_URI
         )
         #creds = flow.run_local_server(port=8080)  # Ensure the port matches the redirect URI
 
