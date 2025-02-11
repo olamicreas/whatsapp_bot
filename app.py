@@ -1,13 +1,16 @@
 from flask import Flask, request, jsonify
 import requests
 import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 import os
 import urllib.parse
 import re
-import json
-from google.oauth2.service_account import Credentials
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from dotenv import load_dotenv
+import json
+import pickle
+from google_auth_oauthlib.flow import InstalledAppFlow
 
 # Load environment variables
 load_dotenv()
@@ -34,14 +37,31 @@ sheet = client_gs.open("WhatsApp Referral Bot").sheet1
 
 # ✅ Fix Google People API (for Google Contacts)
 PEOPLE_API_SCOPES = ["https://www.googleapis.com/auth/contacts"]
-people_creds = Credentials.from_service_account_info(creds_dict, scopes=PEOPLE_API_SCOPES)
-people_service = build("people", "v1", credentials=people_creds)
+REDIRECT_URI = "https://referral-contest.onrender.com/"
 
 # ✅ Mr. Heep's phone number
 MR_HEEP_PHONE = "2347010528330"
 VERIFY_TOKEN = "my_verify_token"
 
 app = Flask(__name__)
+
+def authenticate():
+    creds = None
+    if os.path.exists("token.pickle"):
+        with open("token.pickle", "rb") as token:
+            creds = pickle.load(token)
+    
+    if not creds or not creds.valid:
+        flow = InstalledAppFlow.from_client_secrets_file(
+            "/Users/abdulquayyumoyedotun/Downloads/client_secret_258863544208-vu84m7tuf9j99s10his372sobabqebjs.apps.googleusercontent.com.json", PEOPLE_API_SCOPES, redirect_uri=REDIRECT_URI
+        )
+        #creds = flow.run_local_server(port=8080)  # Ensure the port matches the redirect URI
+
+        with open("token.pickle", "wb") as token:
+            pickle.dump(creds, token)
+
+    return creds
+
 
 # Function to send WhatsApp message via Meta API
 def send_whatsapp_message(to, message):
@@ -109,17 +129,17 @@ def save_to_google_sheets(phone, name, referral_code=None):
 
 # Function to save contact in Google Contacts
 def save_to_google_contacts(name, phone):
-    try:
-        existing_contacts = people_service.people().connections().list(
-            resourceName="people/me", personFields="phoneNumbers"
-        ).execute().get("connections", [])
-        if any(phone == num["value"] for contact in existing_contacts for num in contact.get("phoneNumbers", [])):
-            return False  # Contact already exists
-        people_service.people().createContact(body={"names": [{"givenName": name}], "phoneNumbers": [{"value": phone}]}).execute()
-        return True
-    except Exception as e:
-        print(f"⚠️ Google Contacts Error: {e}")
-        return False
+    creds = authenticate()
+    service = build("people", "v1", credentials=creds)
+
+    contact_data = {
+        "names": [{"givenName": name}],
+        "phoneNumbers": [{"value": phone}],
+    }
+
+    contact = service.people().createContact(body=contact_data).execute()
+    print("✅ Contact created successfully:", contact)
+
 
 # Function to handle referral usage
 def handle_referral_usage(referral_code, referred_phone):
