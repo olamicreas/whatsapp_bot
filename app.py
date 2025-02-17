@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import requests
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -88,6 +88,12 @@ def extract_name(message):
     match = re.search(r"My name is ([A-Za-z\s]+)", message)
     return match.group(1).strip() if match else "Unknown"
 
+def extract_referral_code(message):
+    # Regex pattern to capture a referral code, e.g., "REF101"
+    match = re.search(r"REF\d+", message)
+    return match.group(0) if match else None
+
+
 # Function to generate a unique referral code
 def generate_referral_code():
     users = sheet.get_all_records()
@@ -128,17 +134,24 @@ def save_to_google_sheets(phone, name, referral_code=None):
 
     return referral_code
 
-def save_to_google_contacts(name, phone):
+def save_to_google_contacts(name, phone, referral_code=None):
     creds = authenticate()
     service = build("people", "v1", credentials=creds)
 
+    # Modify the name to include the referral code and "HIPTV"
+    if referral_code:
+        full_name = f"{name} {referral_code} HIPTV"
+    else:
+        full_name = f"{name} HIPTV"
+
     contact_data = {
-        "names": [{"givenName": name}],
+        "names": [{"givenName": full_name}],
         "phoneNumbers": [{"value": phone}],
     }
 
     contact = service.people().createContact(body=contact_data).execute()
     print("✅ Contact created successfully:", contact)
+
 
 def update_heep_saved_status(phone):
     users = sheet.get_all_records()
@@ -229,8 +242,10 @@ def autoresponder():
         sender_name = extract_name(message_content)
         print(f"👤 Extracted Name: {sender_name}")
 
+        referral_code = extract_referral_code(message_content)
+        print(f"🔑 Extracted Referral Code: {referral_code}")
         # Try saving contact first
-        contact_saved = save_to_google_contacts(sender_name, sender_phone)
+        contact_saved = save_to_google_contacts(sender_name, sender_phone, referral_code)
         print(f"📇 Contact Saved to Google: {contact_saved}")
 
         if contact_saved:
