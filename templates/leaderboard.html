@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaderboard</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        .leaderboard-container {
+            max-width: 600px;
+            margin: auto;
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+        }
+        h2 {
+            color: #fff;
+        }
+        .search-bar {
+            margin-bottom: 20px;
+        }
+        input {
+            padding: 10px;
+            width: 80%;
+            border: none;
+            border-radius: 5px;
+            outline: none;
+            background: #333;
+            color: #fff;
+        }
+        .leaderboard {
+            list-style: none;
+            padding: 0;
+        }
+        .leaderboard li {
+            background: #252525;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.3s ease-in-out;
+        }
+        .leaderboard li:hover {
+            transform: scale(1.05);
+        }
+        .rank {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #FFD700;
+        }
+        .referrals {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <div class="leaderboard-container">
+        <h2>Referral Leaderboard</h2>
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Search by Referral Code..." onkeyup="searchUser()">
+        </div>
+        <ul class="leaderboard" id="leaderboardList">
+            <!-- Leaderboard entries will be populated here -->
+        </ul>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            fetch('/get_users')
+                .then(response => response.json())
+                .then(data => {
+                    let users = data.data;
+                    users.sort((a, b) => b.referrals - a.referrals); // Sort by referrals (highest first)
+                    
+                    let leaderboardList = document.getElementById('leaderboardList');
+                    leaderboardList.innerHTML = ''; // Clear existing list
+
+                    users.forEach((user, index) => {
+                        let listItem = document.createElement('li');
+                        listItem.innerHTML = `
+                            <span class="rank">#${index + 1}</span>
+                            <span>${user.name} (${user.referral_code})</span>
+                            <span class="referrals">${user.referrals} Referrals</span>
+                        `;
+                        leaderboardList.appendChild(listItem);
+                    });
+                })
+                .catch(error => console.error('Error fetching users:', error));
+        });
+
+        function searchUser() {
+            let query = document.getElementById("searchInput").value.trim().toUpperCase();
+            let items = document.querySelectorAll(".leaderboard li");
+
+            items.forEach(item => {
+                let text = item.textContent.toUpperCase();
+                item.style.display = text.includes(query) ? "" : "none";
+            });
+        }
+    </script>
+</body>
+</html>

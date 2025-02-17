@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.min.css">
+    
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: #e2e8f0;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+    
+        /* Sidebar for Desktop */
+        .sidebar {
+            width: 200px;
+            background: #0f3460;
+            padding: 20px;
+            flex-shrink: 0;
+            transition: transform 0.3s ease-in-out;
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            top: 0;
+            left: 0;
+        }
+    
+        /* Navbar Title */
+        .sidebar h1 {
+            font-size: 22px;
+            margin-bottom: 20px;
+            color: #e94560;
+            text-align: center;
+        }
+    
+        /* Sidebar Menu */
+        .sidebar ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+    
+        .sidebar ul li {
+            margin: 15px 0;
+        }
+    
+        .sidebar ul li a {
+            color: white;
+            text-decoration: none;
+            display: block;
+            padding: 10px;
+            border-radius: 5px;
+            transition: background 0.3s;
+            cursor: pointer;
+            text-align: center;
+        }
+    
+        .sidebar ul li a:hover,
+        .active {
+            background-color: #e94560;
+        }
+    
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            margin-left: 250px; /* Prevent content from hiding behind sidebar */
+            overflow-y: auto;
+            transition: margin-left 0.3s ease-in-out;
+        }
+    
+       
+        /* Responsive Design for Smaller Screens */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 100%;
+        height: auto;
+        position: fixed;
+        top: 0;
+        left: 0;
+        padding: 10px;
+        text-align: center;
+        display: flex;
+        flex-direction: row;
+        justify-content: space-around;
+    }
+    .admin {
+        display: none;
+    }
+    .sidebar ul {
+        display: flex;
+        flex-direction: row;
+        width: 100%;
+        justify-content: space-around;
+    }
+
+    .sidebar ul li {
+        margin: 0;
+    }
+
+    .sidebar ul li a {
+        padding: 8px 15px;
+        font-size: 14px;
+    }
+
+    .main-content {
+        margin-left: 0;
+        margin-top: 60px;
+        padding: 15px;
+    }
+
+    .table-container {
+        overflow-x: auto;
+        width: 100%;
+        max-width: 100%;
+        display: block;
+    }
+
+    table {
+        width: 100%;
+        table-layout: fixed; /* Ensures table doesn't exceed screen */
+        border-collapse: collapse;
+    }
+
+    th, td {
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        text-align: left;
+    }
+}   
+        /* Chart & Table Containers */
+        .chart-container,
+        .table-container {
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+        }
+    
+        /* Table Styling */
+        table {
+            width: 100%;
+            color: white;
+            border-collapse: collapse;
+        }
+    
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #4b5563;
+        }
+    
+        /* Input & Button Styling */
+        input,
+        button {
+            padding: 10px;
+            margin: 10px 0;
+            background: #1f4068;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    
+        button:hover {
+            background: #e94560;
+        }
+    
+        /* Misc */
+        .hidden {
+            display: none;
+        }
+    
+        #userTable_wrapper {
+            color: black;
+        }
+    
+        td {
+            background-color: black;
+        }
+    
+        label {
+            color: azure;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <h1 class="admin">Admin</h1>
+        <ul>
+            <li><a href="#" onclick="showSection('users')" class="active">Users</a></li>
+            <li><a href="#" onclick="showSection('analytics')">Analytics</a></li>
+            <li><a href="#" onclick="showSection('newUsers')">New Users</a></li>
+        </ul>
+    </div>
+    
+    <div class="main-content">
+        
+        <!-- User Management Section -->
+        <div id="usersSection">
+            <h2>User Management</h2>
+            <input type="text" id="search" placeholder="Search by REF CODE or Name">
+            <button id="searchBtn">Search</button>
+    
+            <div class="table-container">
+                <table id="userTable">
+                    <thead>
+                        <tr>
+                            <th>Phone</th>
+                            <th>Name</th>
+                            <th>Referral Code</th>
+                            <th>Referrals</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+    
+            <!-- User Details & Referral Chart -->
+            <div id="userDetails" class="chart-container"></div>
+    
+            <div class="chart-container">
+                <canvas id="userReferralChart"></canvas>
+            </div>
+        </div>
+    
+        <!-- Analytics Section -->
+        <div id="analyticsSection" class="hidden">
+            <h2>Referral Analytics</h2>
+            <div class="chart-container">
+                <canvas id="referralChart"></canvas>
+            </div>
+        </div>
+    
+        <!-- New Users Section -->
+        <div id="newUsersSection" class="hidden">
+            <h2>New Users Per Month</h2>
+            <div class="chart-container">
+                <canvas id="newUsersChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let referralChart = null; // Store reference for destroying previous chart
+        let newUsersChart = null;
+        let userReferralChart = null; // Store reference for user-specific chart
+        
+        $(document).ready(function() {
+            var table = $('#userTable').DataTable({
+                "ajax": "/get_users",
+                "columns": [
+                    { "data": "phone" },
+                    { "data": "name" },
+                    { "data": "referral_code" },
+                    { "data": "referrals" }
+                ]
+            });
+        
+            $('#searchBtn').on('click', function() {
+                var searchTerm = $('#search').val().trim();
+                if (searchTerm !== "") {
+                    fetchUserData(searchTerm);
+                }
+            });
+        
+            fetchAnalytics();
+            fetchNewUsers();
+        });
+        
+        // Fetch user data by Name or Phone
+        function fetchUserData(searchTerm) {
+            $.getJSON(`/search_user?query=${searchTerm}`, function (data) {
+                if (data.error) {
+                    alert("User not found!");
+                    return;
+                }
+        
+                // Display user details
+                let userInfo = `
+                    <h3>User Details</h3>
+                    <p><strong>Name:</strong> ${data.name}</p>
+                    <p><strong>Phone:</strong> ${data.phone}</p>
+                    <p><strong>Referral Code:</strong> ${data.referral_code}</p>
+                    <p><strong>Total Referrals:</strong> ${data.referrals}</p>
+                `;
+                $("#userDetails").html(userInfo);
+        
+                // Generate user-specific referral chart
+                generateUserReferralChart(data.referral_data);
+            }).fail(function () {
+                alert("Error fetching user data.");
+            });
+        }
+        
+        // Generate chart for searched user's referral performance
+        function generateUserReferralChart(referralData) {
+            let ctx = document.getElementById("userReferralChart").getContext("2d");
+
+            // ✅ Destroy previous chart if exists
+            if (userReferralChart instanceof Chart) {
+                userReferralChart.destroy();
+            }
+
+            // ✅ Ensure correct data mapping
+            userReferralChart = new Chart(ctx, {
+                type: "bar",
+                data: {
+                    labels: referralData.dates,  // Ensure these are date-based labels
+                    datasets: [{
+                        label: "Referrals Over Time",
+                        data: referralData.counts,  // Ensure this matches referral history
+                        backgroundColor: [
+                            "#ff4d6d", "#f72585", "#b5179e", "#7209b7", "#4361ee"
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1, color: "#e2e8f0" },
+                            grid: { color: "rgba(255, 255, 255, 0.2)" }
+                        },
+                        x: {
+                            ticks: { color: "#e2e8f0" },
+                            grid: { color: "rgba(255, 255, 255, 0.2)" }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: "User Referral Growth Over Time",
+                            color: "#e2e8f0",
+                            font: { size: 16 }
+                        },
+                        legend: {
+                            labels: { color: "#e2e8f0" }
+                        }
+                    }
+                }
+            });
+        }
+        // Fetch Referral Analytics
+        function fetchAnalytics() {
+            fetch("/get_analytics")
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    console.error("Error fetching analytics:", data.error);
+                    return;
+                }
+        
+                let ctx = document.getElementById("referralChart").getContext("2d");
+        
+                // ✅ Check if the chart exists before destroying
+                if (referralChart instanceof Chart) {
+                    referralChart.destroy();
+                }
+        
+                // ✅ Create the Pie Chart with unique dark gradient colors
+                referralChart = new Chart(ctx, {
+                    type: "pie",
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            label: "Referrals",
+                            data: data.values,
+                            backgroundColor: [
+                                "#ff4d6d", "#f72585", "#b5179e", "#7209b7", "#4361ee"
+                            ],
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                color: "#e2e8f0",
+                                font: { size: 16 },
+                                text: `Total Users: ${data.total_users}`
+                            },
+                            legend: {
+                                labels: { color: "#e2e8f0" }
+                            }
+                        }
+                    }
+                });
+            })
+            .catch(error => console.error("Error fetching referral analytics:", error));
+        }
+        
+        // Fetch New Users Chart
+        function fetchNewUsers() {
+            $.getJSON("/get_new_users", function(data) {
+                if (newUsersChart instanceof Chart) {
+                    newUsersChart.destroy();
+                }
+        
+                let ctx = document.getElementById("newUsersChart").getContext("2d");
+        
+                newUsersChart = new Chart(ctx, {
+                    type: "bar",
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            label: "New Users",
+                            data: data.values,
+                            backgroundColor: [
+                                "#ff4d6d", "#f72585", "#b5179e", "#7209b7", "#4361ee"
+                            ]
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            y: { beginAtZero: true, ticks: { stepSize: 1 } },
+                            x: { ticks: { color: "#e2e8f0" } }
+                        },
+                        plugins: {
+                            legend: { labels: { color: "#e2e8f0" } }
+                        }
+                    }
+                });
+            }).fail(function(error) {
+                console.error("Error fetching new users:", error);
+            });
+        }
+        
+        // Sidebar Navigation
+        function showSection(section) {
+            document.getElementById('usersSection').classList.add('hidden');
+            document.getElementById('analyticsSection').classList.add('hidden');
+            document.getElementById('newUsersSection').classList.add('hidden');
+            document.getElementById(section + 'Section').classList.remove('hidden');
+        }
+    </script>
+
+</body>
+</html>
