@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 import json
 import pickle
 from google_auth_oauthlib.flow import InstalledAppFlow
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -100,35 +101,33 @@ def generate_whatsapp_link(referral_code, name):
     encoded_message = urllib.parse.quote_plus(message)
     return f"{base_url}?phone={MR_HEEP_PHONE}&text={encoded_message}"
 
-# Function to save user to Google Sheets
+
+
+
 def save_to_google_sheets(phone, name, referral_code=None):
-    try:
-        users = sheet.get_all_records(expected_headers=["Phone", "Name", "Referral code", "Referrals", "Heep saved?", "User saved?"])
-    except gspread.exceptions.GSpreadException:
-        users = []  # If no valid headers exist, treat as empty
+    users = sheet.get_all_records()
+    today_date = datetime.today().strftime("%Y-%m-%d")  # Get today's date
 
     # If sheet is empty, create headers
     if not users:
-        headers = ["Phone", "Name", "Referral code", "Referrals", "Heep saved?", "User saved?"]
-        sheet.clear()  # Clear sheet to remove any hidden characters
+        headers = ["Phone", "Name", "Referral code", "Referrals", "Heep saved?", "User saved?", "Date Joined"]
+        sheet.clear()
         sheet.append_row(headers)
 
     # Check if the user already exists
     for user in users:
         if str(user["Phone"]).strip() == phone:
-            return user["Referral code"]
+            return user["Referral code"]  # Return existing referral code
 
     # Generate a referral code if not provided
     if not referral_code:
         referral_code = generate_referral_code()
 
-    # Append new user row
-    sheet.append_row([phone, name, referral_code, 0, "Pending", "Pending"])
-    
+    # Append new user row with the Date Joined column
+    sheet.append_row([phone, name, referral_code, 0, "Pending", "Pending", today_date])
+
     return referral_code
 
-
-# Function to save contact in Google Contacts
 def save_to_google_contacts(name, phone):
     creds = authenticate()
     service = build("people", "v1", credentials=creds)
@@ -141,57 +140,70 @@ def save_to_google_contacts(name, phone):
     contact = service.people().createContact(body=contact_data).execute()
     print("✅ Contact created successfully:", contact)
 
+def update_heep_saved_status(phone):
+    users = sheet.get_all_records()
+
+    # Find the user by phone number
+    for user in users:
+        if str(user["Phone"]).strip() == phone:
+            user_row = users.index(user) + 2  # The row number in the sheet
+            # Update the "Heep saved?" status to "Saved"
+            sheet.update_cell(user_row, 5, "Saved")  # Column 5 is "Heep saved?"
+
 
 # Function to handle referral usage
-def handle_referral_usage(referral_code, referred_phone):
+def handle_referral_usage(referral_code, referred_phone, referred_name):
     users = sheet.get_all_records()
-    if any(user["Phone"] == referred_phone and user["User saved?"] == "Yes" for user in users):
-        return False  # User already used a referral
+
+    # Check if referred user already exists
+    for user in users:
+        if str(user["Phone"]).strip() == referred_phone:
+            return False  # User already registered
+
+    # Find the referrer
     referrer = next((user for user in users if user["Referral code"] == referral_code), None)
+    
     if referrer:
-        referrer_row = users.index(referrer) + 2
-        sheet.update_cell(referrer_row, 4, int(sheet.cell(referrer_row, 4).value) + 1)
-        sheet.append_row([referred_phone, "Unknown", referral_code, 0, "Pending", "Yes"])
-        return True
-    return False
+        referrer_row = users.index(referrer) + 2  # Row number in Google Sheets
+        new_referral_count = int(sheet.cell(referrer_row, 4).value) + 1  # Increment count
 
-@app.route("/webhook", methods=["GET", "POST"])
+        # Update referrer’s referral count
+        sheet.update_cell(referrer_row, 4, new_referral_count)
+
+        # Save the referred user under the referrer
+        sheet.append_row([referred_phone, referred_name, referral_code, 0, "Pending", "Yes"])
+        
+        return True  # Referral successfully counted
+
+    return False  # Invalid referral code
+
+
+@app.route("/webhook", methods=["POST"])
 def whatsapp_webhook():
-    if request.method == "GET":
-        # WhatsApp webhook verification
-        verify_token = request.args.get("hub.verify_token")
-        challenge = request.args.get("hub.challenge")
+    data = request.get_json()
+    print("📩 Incoming Webhook Data:", json.dumps(data, indent=2))  # Debugging
 
-        if verify_token == VERIFY_TOKEN:
-            return challenge  # Return challenge to verify webhook
-        else:
-            return "Verification failed", 403
+    for entry in data.get("entry", []):
+        for change in entry.get("changes", []):
+            value = change.get("value", {})
+            message_data = value.get("messages", [])
+            contacts = value.get("contacts", [])
 
-    elif request.method == "POST":
-        # Handle incoming messages
-        data = request.get_json()
-        print("📩 Incoming Webhook Data:", json.dumps(data, indent=2))  # Debugging
+            if message_data:
+                message = message_data[0]
+                sender_phone = message["from"]
+                message_text = message["text"]["body"].strip().lower()
 
-        for entry in data.get("entry", []):
-            for change in entry.get("changes", []):
-                value = change.get("value", {})
-                message_data = value.get("messages", [])
-                contacts = value.get("contacts", [])
+                # Extract sender name from contacts
+                sender_name = contacts[0]["profile"]["name"] if contacts else "Unknown"
+                print(f"📞 Sender Phone: {sender_phone}, 👤 Sender Name: {sender_name}")
 
-                if message_data:
-                    message = message_data[0]
-                    sender_phone = message["from"]
-                    message_text = message["text"]["body"].strip().lower()
+                if message_text == "start":
+                    referral_code = save_to_google_sheets(sender_phone, sender_name)
+                    send_whatsapp_message(sender_phone, f"✅ Your referral code is: {referral_code}")
+                    send_whatsapp_message(sender_phone, f"🔗 Share this link: {generate_whatsapp_link(referral_code, sender_name)}")
 
-                    sender_name = contacts[0]["profile"]["name"] if contacts else "Unknown"
-                    print(f"📞 Sender Phone: {sender_phone}, 👤 Sender Name: {sender_name}")
-
-                    if message_text == "start":
-                        referral_code = save_to_google_sheets(sender_phone, sender_name)
-                        send_whatsapp_message(sender_phone, f"✅ Your referral code is: {referral_code}")
-                        send_whatsapp_message(sender_phone, f"🔗 Share this link: {generate_whatsapp_link(referral_code, sender_name)}")
-
-        return jsonify({"status": "success"}), 200
+    return jsonify({"status": "success"}), 200
 
 
 @app.route("/autoresponder", methods=["POST", "GET"])
@@ -223,24 +235,195 @@ def autoresponder():
 
         if contact_saved:
             referral_code = save_to_google_sheets(sender_phone, sender_name)
-            print(f"📊 Referral Code Assigned: {referral_code}")
 
-            # ✅ Increment referral count for the referrer
-            if handle_referral_usage(referral_code, sender_phone):
+            # ✅ Count referral under the correct referrer
+            if handle_referral_usage(referral_code, sender_phone, sender_name):
                 send_whatsapp_message(sender_phone, "✅ Your contact has been saved by Mr. Heep. Your referrer has been rewarded!")
-                print(f"📊 Referral count updated for {referral_code}")
             else:
                 send_whatsapp_message(sender_phone, "✅ Your contact has been saved by Mr. Heep, but no referral was counted.")
-                print(f"⚠️ No referral update needed for {sender_phone}")
-
-        else:
-            send_whatsapp_message(sender_phone, "From Mr Heep! 📩 Contact was already saved. No referral counted.")
-            print(f"📩 Contact was already saved. No referral counted.")
+            update_heep_saved_status(sender_phone)
 
         return jsonify({"status": "success", "message": f"Processed contact {sender_name} ({sender_phone})"}), 200
 
     except Exception as e:
         print(f"⚠️ Autoresponder Error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/dashboard")
+def dashboard():
+    return render_template("dashboard.html")  # Ensure dashboard.html exists in templates folder
+
+@app.route("/get_users")
+def get_users():
+    try:
+        users = sheet.get_all_records()
+        if not users:
+            return jsonify({"data": []})  # Return empty list if no data
+
+        formatted_users = []
+        for user in users:
+            formatted_users.append({
+                "phone": user.get("Phone", ""),  
+                "name": user.get("Name", ""),  
+                "referral_code": user.get("Referral code", ""),  
+                "referrals": int(user.get("Referrals", 0))  # Ensure it's an integer
+            })
+
+        return jsonify({"data": formatted_users})  # ✅ DataTables expects { "data": [] }
+    except Exception as e:
+        print(f"Error fetching users: {str(e)}")  
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/get_analytics")
+def get_analytics():
+    try:
+        users = sheet.get_all_records()
+        referral_counts = {
+            "0 Referrals": 0,
+            "1-2 Referrals": 0,
+            "3-5 Referrals": 0,
+            "6+ Referrals": 0
+        }
+        total_users = len(users)
+
+        for user in users:
+            num_referrals = int(user.get("Referrals", 0))
+
+            if num_referrals == 0:
+                referral_counts["0 Referrals"] += 1
+            elif num_referrals <= 2:
+                referral_counts["1-2 Referrals"] += 1
+            elif num_referrals <= 5:
+                referral_counts["3-5 Referrals"] += 1
+            else:
+                referral_counts["6+ Referrals"] += 1
+
+        return jsonify({
+            "labels": list(referral_counts.keys()),
+            "values": list(referral_counts.values()),
+            "total_users": total_users
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/search_user")
+def search_user():
+    query = request.args.get("query", "").strip()
+    if not query:
+        return jsonify({"error": "No query provided"}), 400
+
+    users = sheet.get_all_records()
+    for user in users:
+        if user["Referral code"].lower() == query.lower() or user["Name"].lower() == query.lower():
+            referral_data = {
+                "labels": ["Jan", "Feb", "Mar", "Apr", "May"],  # Example months
+                "values": [1, 3, 5, 7, user.get("Referrals", 0)]  # Example growth
+            }
+            return jsonify({
+                "phone": user["Phone"],
+                "name": user["Name"],
+                "referral_code": user["Referral code"],
+                "referrals": user["Referrals"],
+                "referral_data": referral_data
+            })
+
+    return jsonify({"error": "User not found"}), 404
+
+
+@app.route("/get_new_users")
+def get_new_users():
+    try:
+        users = sheet.get_all_records()
+        monthly_counts = {}
+
+        print("📊 Raw Users Data:", users)  # Debugging line
+
+        for user in users:
+            phone = user.get("Phone", "")
+            name = user.get("Name", "")
+            referral_code = user.get("Referral code", "")
+            date_str = user.get("Date Joined", "").strip()  # Get and clean the date
+
+            print(f"📅 Processing User: {name}, Date Joined: {date_str}")  # Debugging
+
+            if not date_str:
+                print(f"⚠️ Skipping {name}: No Date Joined")
+                continue  # Skip users with no date
+
+            try:
+                # Convert date to YYYY-MM format
+                date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+                month_year = date_obj.strftime("%Y-%m")
+
+                # Count users per month
+                monthly_counts[month_year] = monthly_counts.get(month_year, 0) + 1
+
+            except ValueError:
+                print(f"❌ Invalid date format for {name}: {date_str}")
+                continue  # Skip invalid dates
+
+        labels = list(monthly_counts.keys())
+        values = list(monthly_counts.values())
+
+        print(f"📈 Final Labels: {labels}")
+        print(f"📊 Final Values: {values}")
+
+        return jsonify({"labels": labels, "values": values})
+
+    except Exception as e:
+        print(f"❌ Error fetching new users: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/get_user_referral")
+def get_user_referral():
+    phone = request.args.get("phone")
+    if not phone:
+        return jsonify({"error": "Phone number is required"}), 400
+
+    try:
+        users = sheet.get_all_records()
+        user_referrals = None
+
+        # Find user and their referral count
+        for user in users:
+            if str(user.get("Phone", "")).strip() == phone:
+                user_referrals = {
+                    "name": user.get("Name", "Unknown"),
+                    "phone": user.get("Phone", ""),
+                    "referral_code": user.get("Referral code", ""),
+                    "referrals": int(user.get("Referrals", 0))
+                }
+                break
+
+        if not user_referrals:
+            return jsonify({"error": "User not found"}), 404
+
+        return jsonify(user_referrals)
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/leaderboard")
+def leaderboard():
+    try:
+        users = sheet.get_all_records()
+        if not users:
+            return render_template("leaderboard.html", users=[])
+
+        # Sort users by referral count in descending order
+        sorted_users = sorted(users, key=lambda x: int(x.get("Referrals", 0)), reverse=True)
+
+        # Assign rank to each user
+        for index, user in enumerate(sorted_users, start=1):
+            user["rank"] = index
+
+        return render_template("leaderboard.html", users=sorted_users)
+    except Exception as e:
+        return render_template("leaderboard.html", users=[], error=str(e))
+
+
+
 if __name__ == "__main__":
     app.run(debug=True)
+
