@@ -108,8 +108,6 @@ def generate_whatsapp_link(referral_code, name):
     return f"{base_url}?phone={MR_HEEP_PHONE}&text={encoded_message}"
 
 
-
-
 def save_to_google_sheets(phone, name, referral_code=None):
     users = sheet.get_all_records()
     today_date = datetime.today().strftime("%Y-%m-%d")  # Get today's date
@@ -123,16 +121,18 @@ def save_to_google_sheets(phone, name, referral_code=None):
     # Check if the user already exists
     for user in users:
         if str(user["Phone"]).strip() == phone:
-            return user["Referral code"]  # Return existing referral code
+            return user["Referral code"]  # Return existing referral code (Don't overwrite)
 
-    # Generate a referral code if not provided
+    # If referral_code is None, the user wasn't referred, so generate a new referral code
     if not referral_code:
         referral_code = generate_referral_code()
 
-    # Append new user row with the Date Joined column
+    # Append new user row with the referrer’s referral code
     sheet.append_row([phone, name, referral_code, 0, "Pending", "Pending", today_date])
 
-    return referral_code
+    return referral_code  # Return the correct referral code
+
+
 
 def save_to_google_contacts(name, phone, referral_code=None):
     try:
@@ -177,27 +177,28 @@ def update_heep_saved_status(phone):
 def handle_referral_usage(referral_code, referred_phone, referred_name):
     users = sheet.get_all_records()
 
-    # Check if referred user already exists
+    # Ensure the referred user is not already registered
     for user in users:
         if str(user["Phone"]).strip() == referred_phone:
-            return False  # User already registered
+            print("⚠️ Referred user already exists in the system.")
+            return False  # Referral should not be counted again
 
-    # Find the referrer
+    # Find the correct referrer
     referrer = next((user for user in users if user["Referral code"] == referral_code), None)
-    
+
     if referrer:
-        referrer_row = users.index(referrer) + 2  # Row number in Google Sheets
-        new_referral_count = int(sheet.cell(referrer_row, 4).value) + 1  # Increment count
+        referrer_row = users.index(referrer) + 2  # Row in Google Sheets
+        new_referral_count = int(sheet.cell(referrer_row, 4).value) + 1  # Increment referral count
 
-        # Update referrer’s referral count
+        # Update the referrer’s referral count
         sheet.update_cell(referrer_row, 4, new_referral_count)
+        print(f"✅ Referral counted for {referrer['Name']} ({referral_code}). New count: {new_referral_count}")
 
-        # Save the referred user under the referrer
-        sheet.append_row([referred_phone, referred_name, referral_code, 0, "Pending", "Yes"])
-        
         return True  # Referral successfully counted
 
-    return False  # Invalid referral code
+    print("⚠️ Invalid referral code. No referral counted.")
+    return False
+
 
 
 @app.route("/webhook", methods=["POST"])
@@ -249,22 +250,25 @@ def autoresponder():
             return jsonify({"status": "error", "message": "Missing sender phone or message content"}), 400
 
         sender_name = extract_name(message_content)
-        print(f"👤 Extracted Name: {sender_name}")
+        referral_code = extract_referral_code(message_content)  # Extract referrer's code
 
-        referral_code = extract_referral_code(message_content)
+        print(f"👤 Extracted Name: {sender_name}")
         print(f"🔑 Extracted Referral Code: {referral_code}")
-        # Try saving contact first
+
+        # Save referred contact to Google Contacts under the referrer’s referral code
         contact_saved = save_to_google_contacts(sender_name, sender_phone, referral_code)
         print(f"📇 Contact Saved to Google: {contact_saved}")
 
         if contact_saved:
-            referral_code = save_to_google_sheets(sender_phone, sender_name)
+            # Save referred person with the referrer's referral code (not generating a new one)
+            referral_code = save_to_google_sheets(sender_phone, sender_name, referral_code)
 
-            # ✅ Count referral under the correct referrer
+            # ✅ Count referral under the referrer
             if handle_referral_usage(referral_code, sender_phone, sender_name):
                 send_whatsapp_message(sender_phone, "✅ Your contact has been saved by Mr. Heep. Your referrer has been rewarded!")
             else:
                 send_whatsapp_message(sender_phone, "✅ Your contact has been saved by Mr. Heep, but no referral was counted.")
+
             update_heep_saved_status(sender_phone)
 
         return jsonify({"status": "success", "message": f"Processed contact {sender_name} ({sender_phone})"}), 200
@@ -272,6 +276,7 @@ def autoresponder():
     except Exception as e:
         print(f"⚠️ Autoresponder Error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
+
 
 @app.route("/dashboard")
 def dashboard():
