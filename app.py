@@ -135,22 +135,31 @@ def save_to_google_sheets(phone, name, referral_code=None):
     return referral_code
 
 def save_to_google_contacts(name, phone, referral_code=None):
-    creds = authenticate()
-    service = build("people", "v1", credentials=creds)
+    try:
+        creds = authenticate()
+        service = build("people", "v1", credentials=creds)
 
-    # Modify the name to include the referral code and "HIPTV"
-    if referral_code:
-        full_name = f"{name} {referral_code} HIPTV"
-    else:
-        full_name = f"{name} HIPTV"
+        # Modify the name to include the referral code and "HIPTV"
+        if referral_code:
+            full_name = f"{name} {referral_code} HIPTV"
+        else:
+            full_name = f"{name} HIPTV"
 
-    contact_data = {
-        "names": [{"givenName": full_name}],
-        "phoneNumbers": [{"value": phone}],
-    }
+        contact_data = {
+            "names": [{"givenName": full_name}],
+            "phoneNumbers": [{"value": phone}],
+        }
 
-    contact = service.people().createContact(body=contact_data).execute()
-    print("✅ Contact created successfully:", contact)
+        contact = service.people().createContact(body=contact_data).execute()
+        print("✅ Contact created successfully:", contact)
+
+        # Return the contact's resource name (ID) instead of None
+        return contact.get("resourceName", None)
+    
+    except Exception as e:
+        print(f"⚠️ Error saving contact: {e}")
+        return None
+
 
 
 def update_heep_saved_status(phone):
