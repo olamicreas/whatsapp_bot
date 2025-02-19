@@ -237,7 +237,11 @@ def autoresponder():
 
         if not data or "query" not in data:
             print("⚠️ Invalid data received in autoresponder.")
-            return jsonify({"status": "error", "message": "Invalid data received"}), 400
+            return jsonify({
+                "status": "error",
+                "message": "Invalid data received",
+                "replies": [{"message": "⚠️ Invalid data received. Please try again."}]
+            }), 400
 
         sender_phone = data["query"].get("sender", "").strip().replace(" ", "")
         message_content = data["query"].get("message", "").strip()
@@ -247,7 +251,11 @@ def autoresponder():
 
         if not sender_phone or not message_content:
             print("⚠️ Missing sender phone or message content.")
-            return jsonify({"status": "error", "message": "Missing sender phone or message content"}), 400
+            return jsonify({
+                "status": "error",
+                "message": "Missing sender phone or message content",
+                "replies": [{"message": "⚠️ Missing required information. Please try again."}]
+            }), 400
 
         sender_name = extract_name(message_content)
         referral_code = extract_referral_code(message_content)  # Extract referrer's code
@@ -265,17 +273,28 @@ def autoresponder():
 
             # ✅ Count referral under the referrer
             if handle_referral_usage(referral_code, sender_phone, sender_name):
-                send_whatsapp_message(sender_phone, "✅ Your contact has been saved by Mr. Heep. Your referrer has been rewarded!")
+                response_message = "✅ Your contact has been saved by Mr. Heep. Your referrer has been rewarded!"
             else:
-                send_whatsapp_message(sender_phone, "✅ Your contact has been saved by Mr. Heep, but no referral was counted.")
+                response_message = "✅ Your contact has been saved by Mr. Heep, but no referral was counted."
 
             update_heep_saved_status(sender_phone)
+        else:
+            response_message = "❌ Contact could not be saved. Please try again."
 
-        return jsonify({"status": "success", "message": f"Processed contact {sender_name} ({sender_phone})"}), 200
+        # ✅ Return JSON response with `replies` array for WhatsApp
+        return jsonify({
+            "status": "success",
+            "message": f"Processed contact {sender_name} ({sender_phone})",
+            "replies": [{"message": response_message}]
+        }), 200
 
     except Exception as e:
         print(f"⚠️ Autoresponder Error: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "replies": [{"message": "⚠️ An error occurred while processing your request."}]
+        }), 500
 
 
 @app.route("/dashboard")
