@@ -198,7 +198,38 @@ def handle_referral_usage(referral_code, referred_phone, referred_name):
 
     print("⚠️ Invalid referral code. No referral counted.")
     return False
+    
+def normalize_phone_number(phone):
+    return re.sub(r"\D", "", phone)  # Remove non-digit characters
 
+def verify_heep_contact(vcard_contact):
+    heep_official_phone = normalize_phone_number(MR_HEEP_PHONE)
+
+    contact_numbers = vcard_contact.get("phones", [])
+    for phone in contact_numbers:
+        if normalize_phone_number(phone["phone"]) == heep_official_phone:
+            return True
+    return False
+
+
+
+def update_heep_saved_status(phone, verified=False):
+    users = sheet.get_all_records()
+    for i, user in enumerate(users, start=2):  # Start from row 2 (excluding headers)
+        if str(user["Phone"]).strip() == phone:
+            status = "Verified" if verified else "Pending"
+            sheet.update_cell(i, 5, status)  # Column 5 is "Heep saved?"
+            return True
+    return False
+
+def update_user_saved_status(phone, verified=False):
+    users = sheet.get_all_records()
+    for i, user in enumerate(users, start=2):  # Start from row 2
+        if str(user["Phone"]).strip() == phone:
+            status = "Verified" if verified else "Pending"
+            sheet.update_cell(i, 6, status)  # Column 6 is "User saved?"
+            return True
+    return False
 
 
 @app.route("/webhook", methods=["POST"])
@@ -226,6 +257,22 @@ def whatsapp_webhook():
                     send_whatsapp_message(sender_phone, f"✅ Your referral code is: {referral_code}")
                     send_whatsapp_message(sender_phone, f"🔗 Share this link: {generate_whatsapp_link(referral_code, sender_name)}")
 
+                elif message_text == "verify":
+                    send_whatsapp_message(sender_phone, "📩 Please send Mr. Heep’s contact as a vCard to verify.\n\nFollow these steps to send a contact card:\n1️⃣ Tap the + (iPhone) or 📎 (Android) icon.\n2️⃣ Select 'Contact'.\n3️⃣ Choose 'Mr. Heep' and send.\n\n✅ Done! We will verify it shortly.")
+
+
+            elif message_type == "contacts":
+                vcard_contact = message["contacts"][0]  # Extract vCard contact
+                heep_verified = verify_heep_contact(vcard_contact)
+
+                if heep_verified:
+                    update_heep_saved_status(sender_phone, verified=True)
+                    send_whatsapp_message(sender_phone, "✅ Verification successful! Mr. Heep’s contact has been saved.")
+                else:
+                    send_whatsapp_message(sender_phone, "❌ Verification failed. Please make sure you’ve saved Mr. Heep’s contact correctly.")
+
+
+    
     return jsonify({"status": "success"}), 200
 
 
@@ -270,7 +317,7 @@ def autoresponder():
         if contact_saved:
             # Save referred person with the referrer's referral code (not generating a new one)
             referral_code = save_to_google_sheets(sender_phone, sender_name, referral_code)
-
+            update_user_saved_status(sender_phone, verified=True)
             # ✅ Count referral under the referrer
             if handle_referral_usage(referral_code, sender_phone, sender_name):
                 response_message = "✅ Your contact has been saved by Mr. Heep. Your referrer has been rewarded!"
