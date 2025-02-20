@@ -185,19 +185,28 @@ def handle_referral_usage(referral_code, referred_phone, referred_name):
 
     # Find the correct referrer
     referrer = next((user for user in users if user["Referral code"] == referral_code), None)
+    referred_user = next((user for user in users if str(user["Phone"]).strip() == referred_phone), None)
 
-    if referrer:
+    if referrer and referred_user:
         referrer_row = users.index(referrer) + 2  # Row in Google Sheets
-        new_referral_count = int(sheet.cell(referrer_row, 4).value) + 1  # Increment referral count
+        referred_row = users.index(referred_user) + 2  # Row in Google Sheets
 
-        # Update the referrer’s referral count
-        sheet.update_cell(referrer_row, 4, new_referral_count)
-        print(f"✅ Referral counted for {referrer['Name']} ({referral_code}). New count: {new_referral_count}")
+        # Check if both verifications are completed
+        heep_saved_status = sheet.cell(referred_row, 5).value  # Column 5 = "Heep saved?"
+        user_saved_status = sheet.cell(referred_row, 6).value  # Column 6 = "User saved?"
 
-        return True  # Referral successfully counted
+        if heep_saved_status == "Verified" and user_saved_status == "Verified":
+            new_referral_count = int(sheet.cell(referrer_row, 4).value) + 1  # Increment referral count
 
-    print("⚠️ Invalid referral code. No referral counted.")
+            # Update the referrer’s referral count
+            sheet.update_cell(referrer_row, 4, new_referral_count)
+            print(f"✅ Referral counted for {referrer['Name']} ({referral_code}). New count: {new_referral_count}")
+
+            return True  # Referral successfully counted
+
+    print("⚠️ Referral not counted. Both verifications are required.")
     return False
+
     
 def normalize_phone_number(phone):
     return re.sub(r"\D", "", phone)  # Remove non-digit characters
@@ -277,6 +286,7 @@ def whatsapp_webhook():
 
 
 @app.route("/autoresponder", methods=["POST", "GET"])
+
 def autoresponder():
     try:
         data = request.get_json()
@@ -315,16 +325,43 @@ def autoresponder():
         print(f"📇 Contact Saved to Google: {contact_saved}")
 
         if contact_saved:
-            # Save referred person with the referrer's referral code (not generating a new one)
             referral_code = save_to_google_sheets(sender_phone, sender_name, referral_code)
             update_user_saved_status(sender_phone, verified=True)
-            # ✅ Count referral under the referrer
-            if handle_referral_usage(referral_code, sender_phone, sender_name):
-                response_message = "✅ Your contact has been saved by Mr. Heep. Your referrer has been rewarded!"
-            else:
-                response_message = "✅ Your contact has been saved by Mr. Heep, but no referral was counted."
-
             update_heep_saved_status(sender_phone)
+
+            # ✅ Check if Mr. Heep is saved by the referred user
+            heep_saved_by_user = check_if_heep_saved(sender_phone)  # Implement this function
+
+            if heep_saved_by_user:
+                # ✅ Now both Mr. Heep and the user have each other saved, count referral
+                if handle_referral_usage(referral_code, sender_phone, sender_name):
+                    response_message = """You're welcome home 💙
+
+✅ Your contact has been saved by Mr. Heep. Your referrer has been rewarded!
+
+Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
+
+🔹 *Click below to verify you have Mr. Heep's contact saved:*  
+👉 [Click here to verify](https://wa.me/YOUR_BOT_NUMBER?text=verify)"""
+                else:
+                    response_message = """You're welcome home 💙
+
+✅ Your contact has been saved by Mr. Heep, but your referrer has not been rewarded yet. Please ensure both verifications are complete.
+
+Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
+
+🔹 *Click below to verify you have Mr. Heep's contact saved:*  
+👉 [Click here to verify](https://wa.me/YOUR_BOT_NUMBER?text=verify)"""
+            else:
+                response_message = """You're welcome home 💙
+
+✅ Your contact has been saved by Mr. Heep.  
+
+Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
+
+🔹 *Click below to verify you have Mr. Heep's contact saved:*  
+👉 [Click here to verify](https://wa.me/YOUR_BOT_NUMBER?text=verify)"""
+
         else:
             response_message = "❌ Contact could not be saved. Please try again."
 
