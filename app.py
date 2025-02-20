@@ -246,33 +246,33 @@ def whatsapp_webhook():
             if message_data:
                 message = message_data[0]
                 sender_phone = message["from"]
-                message_text = message["text"]["body"].strip().lower()
-
+                message_type = message["type"]  # Ensure we check the message type
+                
                 # Extract sender name from contacts
                 sender_name = contacts[0]["profile"]["name"] if contacts else "Unknown"
-                print(f"📞 Sender Phone: {sender_phone}, 👤 Sender Name: {sender_name}")
+                print(f"📞 Sender Phone: {sender_phone}, 👤 Sender Name: {sender_name}, 📝 Message Type: {message_type}")
 
-                if message_text == "start":
-                    referral_code = save_to_google_sheets(sender_phone, sender_name)
-                    send_whatsapp_message(sender_phone, f"✅ Your referral code is: {referral_code}")
-                    send_whatsapp_message(sender_phone, f"🔗 Share this link: {generate_whatsapp_link(referral_code, sender_name)}")
+                if message_type == "text":
+                    message_text = message["text"]["body"].strip().lower()
 
-                elif message_text == "verify":
-                    send_whatsapp_message(sender_phone, "📩 Please send Mr. Heep’s contact as a vCard to verify.\n\nFollow these steps to send a contact card:\n1️⃣ Tap the + (iPhone) or 📎 (Android) icon.\n2️⃣ Select 'Contact'.\n3️⃣ Choose 'Mr. Heep' and send.\n\n✅ Done! We will verify it shortly.")
+                    if message_text == "start":
+                        referral_code = save_to_google_sheets(sender_phone, sender_name)
+                        send_whatsapp_message(sender_phone, f"✅ Your referral code is: {referral_code}")
+                        send_whatsapp_message(sender_phone, f"🔗 Share this link: {generate_whatsapp_link(referral_code, sender_name)}")
 
+                    elif message_text == "verify":
+                        send_whatsapp_message(sender_phone, "📩 Please send Mr. Heep’s contact as a vCard to verify.\n\nFollow these steps to send a contact card:\n1️⃣ Tap the + (iPhone) or 📎 (Android) icon.\n2️⃣ Select 'Contact'.\n3️⃣ Choose 'Mr. Heep' and send.\n\n✅ Done! We will verify it shortly.")
 
-            elif message_type == "contacts":
-                vcard_contact = message["contacts"][0]  # Extract vCard contact
-                heep_verified = verify_heep_contact(vcard_contact)
+                elif message_type == "contacts":
+                    vcard_contact = message["contacts"][0]  # Extract vCard contact
+                    heep_verified = verify_heep_contact(vcard_contact)
 
-                if heep_verified:
-                    update_heep_saved_status(sender_phone, verified=True)
-                    send_whatsapp_message(sender_phone, "✅ Verification successful! Mr. Heep’s contact has been saved.")
-                else:
-                    send_whatsapp_message(sender_phone, "❌ Verification failed. Please make sure you’ve saved Mr. Heep’s contact correctly.")
+                    if heep_verified:
+                        update_heep_saved_status(sender_phone, verified=True)
+                        send_whatsapp_message(sender_phone, "✅ Verification successful! Mr. Heep’s contact has been saved.")
+                    else:
+                        send_whatsapp_message(sender_phone, "❌ Verification failed. Please make sure you’ve saved Mr. Heep’s contact correctly.")
 
-
-    
     return jsonify({"status": "success"}), 200
 
 
