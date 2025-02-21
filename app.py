@@ -108,13 +108,13 @@ def generate_whatsapp_link(referral_code, name):
     return f"{base_url}?phone={MR_HEEP_PHONE}&text={encoded_message}"
 
 
-def save_to_google_sheets(phone, name, referral_code=None):
+def save_to_google_sheets(phone, name, referral_code=None, referrer_phone=None):
     users = sheet.get_all_records()
     today_date = datetime.today().strftime("%Y-%m-%d")  # Get today's date
 
     # If sheet is empty, create headers
     if not users:
-        headers = ["Phone", "Name", "Referral code", "Referrals", "Heep saved?", "User saved?", "Date Joined"]
+        headers = ["Phone", "Name", "Referral code", "Referred By", "Referrals", "Heep saved?", "User saved?", "Date Joined"]
         sheet.clear()
         sheet.append_row(headers)
 
@@ -127,10 +127,11 @@ def save_to_google_sheets(phone, name, referral_code=None):
     if not referral_code:
         referral_code = generate_referral_code()
 
-    # Append new user row with the referrer’s referral code
-    sheet.append_row([phone, name, referral_code, 0, "Pending", "Pending", today_date])
+    # Append new user row with the referrer’s phone number
+    sheet.append_row([phone, name, referral_code, referrer_phone or "", 0, "Pending", "Pending", today_date])
 
     return referral_code  # Return the correct referral code
+
 
 
 
