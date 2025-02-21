@@ -112,25 +112,26 @@ def save_to_google_sheets(phone, name, referral_code=None, referrer_phone=None):
     users = sheet.get_all_records()
     today_date = datetime.today().strftime("%Y-%m-%d")  # Get today's date
 
-    # If sheet is empty, create headers
+    # If sheet is empty, create headers in the correct order
     if not users:
-        headers = ["Phone", "Name", "Referral code", "Referred By", "Referrals", "Heep saved?", "User saved?", "Date Joined"]
+        headers = ["Phone", "Name", "Referral Code", "Referrals", "Heep Saved?", "User Saved?", "Date Joined", "Referred By"]
         sheet.clear()
         sheet.append_row(headers)
 
     # Check if the user already exists
     for user in users:
         if str(user["Phone"]).strip() == phone:
-            return user["Referral code"]  # Return existing referral code (Don't overwrite)
+            return user["Referral Code"]  # Return existing referral code (Don't overwrite)
 
     # If referral_code is None, the user wasn't referred, so generate a new referral code
     if not referral_code:
         referral_code = generate_referral_code()
 
-    # Append new user row with the referrer’s phone number
-    sheet.append_row([phone, name, referral_code, referrer_phone or "", 0, "Pending", "Pending", today_date])
+    # Append new user row with the referrer’s phone number (correct column order)
+    sheet.append_row([phone, name, referral_code, 0, "Pending", "Pending", today_date, referrer_phone or ""])
 
     return referral_code  # Return the correct referral code
+
 
 
 
