@@ -447,10 +447,9 @@ def get_analytics():
         total_users = len(users)
         total_pending_referrals = 0
 
-        # Count referral categories and pending referrals
         for user in users:
             num_referrals = int(user.get("Referrals", 0))
-            user_phone = user.get("Phone", "").strip()
+            user_phone = str(user.get("Phone", "")).strip()  # Ensure it's a string
 
             # Categorize referral counts
             if num_referrals == 0:
@@ -464,9 +463,11 @@ def get_analytics():
 
             # Count pending referrals
             for ref_user in users:
-                if ref_user.get("Referred By", "").strip() == user_phone:
-                    heep_saved = ref_user.get("Heep saved?", "").strip().lower()
-                    user_saved = ref_user.get("User saved?", "").strip().lower()
+                referred_by = str(ref_user.get("Referred By", "")).strip()  # Convert to string safely
+                
+                if referred_by == user_phone:
+                    heep_saved = str(ref_user.get("Heep saved?", "")).strip().lower()
+                    user_saved = str(ref_user.get("User saved?", "")).strip().lower()
 
                     if heep_saved != "verified" or user_saved != "verified":
                         total_pending_referrals += 1
@@ -478,6 +479,7 @@ def get_analytics():
             "total_pending_referrals": total_pending_referrals
         })
     except Exception as e:
+        print(f"❌ Error in /get_analytics: {str(e)}")  # Debugging
         return jsonify({"error": str(e)}), 500
 
 
