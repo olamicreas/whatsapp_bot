@@ -394,7 +394,7 @@ def get_users():
     try:
         users = sheet.get_all_records()
         if not users:
-            return jsonify({"data": []})  # Return empty list if no data
+            return jsonify({"data": []})  
 
         formatted_users = []
         for user in users:
@@ -402,13 +402,16 @@ def get_users():
                 "phone": user.get("Phone", ""),  
                 "name": user.get("Name", ""),  
                 "referral_code": user.get("Referral code", ""),  
-                "referrals": int(user.get("Referrals", 0))  # Ensure it's an integer
+                "referrals": int(user.get("Referrals", 0)),  
+                "heep_saved": user.get("Heep saved?", "Pending"),  # ✅ Include "Heep saved?"
+                "user_saved": user.get("User saved?", "Pending")   # ✅ Include "User saved?"
             })
 
-        return jsonify({"data": formatted_users})  # ✅ DataTables expects { "data": [] }
+        return jsonify({"data": formatted_users})  
     except Exception as e:
         print(f"Error fetching users: {str(e)}")  
         return jsonify({"error": str(e)}), 500
+
 
 @app.route("/get_analytics")
 def get_analytics():
@@ -505,7 +508,6 @@ def get_new_users():
         print(f"📊 Final Values: {values}")
 
         return jsonify({"labels": labels, "values": values})
-
     except Exception as e:
         print(f"❌ Error fetching new users: {str(e)}")
         return jsonify({"error": str(e)}), 500
@@ -515,19 +517,33 @@ def get_user_referral():
     phone = request.args.get("phone")
     if not phone:
         return jsonify({"error": "Phone number is required"}), 400
-
     try:
         users = sheet.get_all_records()
         user_referrals = None
+        total_referrals = 0
+        pending_referrals = 0
 
         # Find user and their referral count
         for user in users:
             if str(user.get("Phone", "")).strip() == phone:
+                total_referrals = int(user.get("Referrals", 0))
+                referral_code = user.get("Referral code", "")
+
+                # Count pending referrals
+                for ref_user in users:
+                    if ref_user.get("Referral code", "") == referral_code:
+                        heep_saved = ref_user.get("Heep saved?", "").strip().lower()
+                        user_saved = ref_user.get("User saved?", "").strip().lower()
+                        
+                        if heep_saved != "verified" or user_saved != "verified":
+                            pending_referrals += 1
+
                 user_referrals = {
                     "name": user.get("Name", "Unknown"),
                     "phone": user.get("Phone", ""),
-                    "referral_code": user.get("Referral code", ""),
-                    "referrals": int(user.get("Referrals", 0))
+                    "referral_code": referral_code,
+                    "referrals": total_referrals,
+                    "pending_referrals": pending_referrals
                 }
                 break
 
@@ -557,8 +573,6 @@ def leaderboard():
         return render_template("leaderboard.html", users=sorted_users)
     except Exception as e:
         return render_template("leaderboard.html", users=[], error=str(e))
-
-
 
 if __name__ == "__main__":
     app.run(debug=True)
