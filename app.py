@@ -301,6 +301,7 @@ def autoresponder():
 
         sender_phone = data["query"].get("sender", "").strip().replace(" ", "")
         message_content = data["query"].get("message", "").strip()
+        vcard_contact = data["query"].get("vcard", {})  # Assuming vCard data is sent
 
         print(f"📞 Extracted Sender Phone: {sender_phone}")
         print(f"📝 Extracted Message Content: {message_content}")
@@ -329,7 +330,7 @@ def autoresponder():
             update_heep_saved_status(sender_phone)
 
             # ✅ Check if Mr. Heep is saved by the referred user
-            heep_saved_by_user = check_if_heep_saved(sender_phone)  # Implement this function
+            heep_saved_by_user = verify_heep_contact(vcard_contact)
 
             if heep_saved_by_user:
                 # ✅ Now both Mr. Heep and the user have each other saved, count referral
@@ -369,6 +370,7 @@ def autoresponder():
             "message": str(e),
             "replies": [{"message": "⚠️ An error occurred while processing your request."}]
         }), 500
+
 
 
 
