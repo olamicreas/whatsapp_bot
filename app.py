@@ -103,7 +103,7 @@ def generate_referral_code():
 # Function to generate a WhatsApp referral link
 def generate_whatsapp_link(referral_code, name):
     base_url = "https://api.whatsapp.com/send"
-    message = f"Hello, Mr Heep. I’m from {referral_code}. My name is {name}."
+    message = f"Hello, Mr. Heep. I’m from {referral_code}. My name is {name}."
     encoded_message = urllib.parse.quote_plus(message)
     return f"{base_url}?phone={MR_HEEP_PHONE}&text={encoded_message}"
 
