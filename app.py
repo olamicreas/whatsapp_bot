@@ -324,36 +324,6 @@ def autoresponder():
         print(f"📇 Contact Saved to Google: {contact_saved}")
 
         if contact_saved:
-            # Save referred person with the referrer's referral code (not generating a new one)
-            referral_code = save_to_google_sheets(sender_phone, sender_name, referral_code)
-            update_user_saved_status(sender_phone, verified=True)
-            # ✅ Count referral under the referrer
-            if handle_referral_usage(referral_code, sender_phone, sender_name):
-                response_message = "✅ Your contact has been saved by Mr. Heep. Your referrer has been rewarded!"
-            else:
-                response_message = "✅ Your contact has been saved by Mr. Heep, but no referral was counted."
-
-            update_heep_saved_status(sender_phone)
-        else:
-            response_message = "❌ Contact could not be saved. Please try again."
-
-        # ✅ Return JSON response with `replies` array for WhatsApp
-        return jsonify({
-            "status": "success",
-            "message": f"Processed contact {sender_name} ({sender_phone})",
-            "replies": [{"message": response_message}]
-        }), 200
-
-    except Exception as e:
-        print(f"⚠️ Autoresponder Error: {e}")
-        return jsonify({
-            "status": "error",
-            "message": str(e),
-            "replies": [{"message": "⚠️ An error occurred while processing your request."}]
-        }), 500
-
-
-        if contact_saved:
             referral_code = save_to_google_sheets(sender_phone, sender_name, referral_code)
             update_user_saved_status(sender_phone, verified=True)
             update_heep_saved_status(sender_phone)
@@ -381,6 +351,25 @@ def autoresponder():
                 Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
                 🔹 *Click below to verify you have Mr. Heep's contact saved:*  
                 👉 [Click here to verify](https://wa.me/YOUR_BOT_NUMBER?text=verify)"""
+
+        else:
+            response_message = "❌ Contact could not be saved. Please try again."
+
+        # ✅ Return JSON response with `replies` array for WhatsApp
+        return jsonify({
+            "status": "success",
+            "message": f"Processed contact {sender_name} ({sender_phone})",
+            "replies": [{"message": response_message}]
+        }), 200
+
+    except Exception as e:
+        print(f"⚠️ Autoresponder Error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "replies": [{"message": "⚠️ An error occurred while processing your request."}]
+        }), 500
+
 
 
 
