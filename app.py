@@ -402,27 +402,34 @@ def get_users():
         print("🔍 Raw Users Data:", users)  # Debugging line to print all users
 
         for user in users:
-            user_phone = user.get("Phone", "").strip()
-            total_referrals = int(user.get("Referrals", 0))
+            user_phone = str(user.get("Phone", "")).strip()
 
-            # Debugging: Print each user
-            print(f"👤 Checking {user.get('Name', 'Unknown')} (Phone: {user_phone})")
+            # Convert referrals safely
+            num_referrals = user.get("Referrals", 0)
+            total_referrals = int(num_referrals) if str(num_referrals).isdigit() else 0
+
+            print(f"👤 Checking {user.get('Name', 'Unknown')} (Phone: {user_phone})")  # Debugging
 
             # Count pending referrals
             pending_referrals = 0
             for u in users:
-                if u.get("Referred By", "").strip() == user_phone:
+                referred_by = str(u.get("Referred By", "")).strip()
+
+                if referred_by == user_phone:
                     print(f"🔗 Found Referral: {u.get('Name', 'Unknown')} - Heep Saved: {u.get('Heep saved?')}, User Saved: {u.get('User saved?')}")  # Debugging
 
-                    if u.get("Heep saved?") == "Pending" or u.get("User saved?") == "Pending":
+                    heep_saved = str(u.get("Heep saved?", "")).strip().lower()
+                    user_saved = str(u.get("User saved?", "")).strip().lower()
+
+                    if heep_saved != "verified" or user_saved != "verified":
                         pending_referrals += 1
 
             print(f"📌 {user.get('Name', 'Unknown')} - Pending Referrals: {pending_referrals}")  # Debugging
 
             processed_users.append({
                 "phone": user_phone,
-                "name": user.get("Name", "Unknown"),
-                "referral_code": user.get("Referral code", "").strip(),
+                "name": str(user.get("Name", "Unknown")),
+                "referral_code": str(user.get("Referral code", "")).strip(),
                 "referrals": total_referrals,
                 "pending_referrals": pending_referrals
             })
@@ -430,7 +437,9 @@ def get_users():
         return jsonify({"data": processed_users})
 
     except Exception as e:
+        print(f"❌ Error in /get_users: {str(e)}")  # Log the error
         return jsonify({"error": str(e)}), 500
+
 
 
 
