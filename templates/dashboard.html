@@ -224,8 +224,10 @@
                             <th>Name</th>
                             <th>Ref Code</th>
                             <th>Refs</th>
+                            <th>Pending Refs</th> <!-- ✅ New Column -->
                         </tr>
                     </thead>
+                    
                     <tbody></tbody>
                 </table>
             </div>
@@ -267,9 +269,12 @@
                     { "data": "phone" },
                     { "data": "name" },
                     { "data": "referral_code" },
-                    { "data": "referrals" }
+                    { "data": "referrals" },
+                    { "data": "pending_referrals" } // ✅ Include pending referrals
                 ]
             });
+       
+
         
             $('#searchBtn').on('click', function() {
                 var searchTerm = $('#search').val().trim();
@@ -309,53 +314,50 @@
         
         // Generate chart for searched user's referral performance
         function generateUserReferralChart(referralData) {
-            let ctx = document.getElementById("userReferralChart").getContext("2d");
+    let ctx = document.getElementById("userReferralChart").getContext("2d");
 
-            // ✅ Destroy previous chart if exists
-            if (userReferralChart instanceof Chart) {
-                userReferralChart.destroy();
-            }
+    if (userReferralChart instanceof Chart) {
+        userReferralChart.destroy();
+    }
 
-            // ✅ Ensure correct data mapping
-            userReferralChart = new Chart(ctx, {
-                type: "bar",
-                data: {
-                    labels: referralData.dates,  // Ensure these are date-based labels
-                    datasets: [{
-                        label: "Referrals Over Time",
-                        data: referralData.counts,  // Ensure this matches referral history
-                        backgroundColor: [
-                            "#ff4d6d", "#f72585", "#b5179e", "#7209b7", "#4361ee"
-                        ]
-                    }]
+    userReferralChart = new Chart(ctx, {
+        type: "bar",
+        data: {
+            labels: ["Verified Referrals", "Pending Referrals"],
+            datasets: [{
+                label: "Referrals",
+                data: [referralData.verified, referralData.pending], // Include pending referrals
+                backgroundColor: ["#28a745", "#ffcc00"] // Green for verified, yellow for pending
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { stepSize: 1, color: "#e2e8f0" },
+                    grid: { color: "rgba(255, 255, 255, 0.2)" }
                 },
-                options: {
-                    responsive: true,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: { stepSize: 1, color: "#e2e8f0" },
-                            grid: { color: "rgba(255, 255, 255, 0.2)" }
-                        },
-                        x: {
-                            ticks: { color: "#e2e8f0" },
-                            grid: { color: "rgba(255, 255, 255, 0.2)" }
-                        }
-                    },
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: "User Referral Growth Over Time",
-                            color: "#e2e8f0",
-                            font: { size: 16 }
-                        },
-                        legend: {
-                            labels: { color: "#e2e8f0" }
-                        }
-                    }
+                x: {
+                    ticks: { color: "#e2e8f0" },
+                    grid: { color: "rgba(255, 255, 255, 0.2)" }
                 }
-            });
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: "User Referral Breakdown",
+                    color: "#e2e8f0",
+                    font: { size: 16 }
+                },
+                legend: {
+                    labels: { color: "#e2e8f0" }
+                }
+            }
         }
+    });
+}
+
         // Fetch Referral Analytics
         function fetchAnalytics() {
             fetch("/get_analytics")
@@ -365,25 +367,22 @@
                     console.error("Error fetching analytics:", data.error);
                     return;
                 }
-        
+
                 let ctx = document.getElementById("referralChart").getContext("2d");
-        
-                // ✅ Check if the chart exists before destroying
+
                 if (referralChart instanceof Chart) {
                     referralChart.destroy();
                 }
-        
-                // ✅ Create the Pie Chart with unique dark gradient colors
+
+                // ✅ Include pending referrals in the analytics pie chart
                 referralChart = new Chart(ctx, {
                     type: "pie",
                     data: {
-                        labels: data.labels,
+                        labels: ["Verified Referrals", "Pending Referrals"],
                         datasets: [{
                             label: "Referrals",
-                            data: data.values,
-                            backgroundColor: [
-                                "#ff4d6d", "#f72585", "#b5179e", "#7209b7", "#4361ee"
-                            ],
+                            data: [data.verified_referrals, data.pending_referrals], // Include pending referrals
+                            backgroundColor: ["#28a745", "#ffcc00"], // Green for verified, yellow for pending
                             hoverOffset: 4
                         }]
                     },
@@ -405,7 +404,7 @@
             })
             .catch(error => console.error("Error fetching referral analytics:", error));
         }
-        
+
         // Fetch New Users Chart
         function fetchNewUsers() {
             $.getJSON("/get_new_users", function(data) {
