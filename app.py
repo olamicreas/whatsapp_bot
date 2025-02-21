@@ -397,24 +397,41 @@ def dashboard():
 def get_users():
     try:
         users = sheet.get_all_records()
-        if not users:
-            return jsonify({"data": []})  
+        processed_users = []
 
-        formatted_users = []
+        print("🔍 Raw Users Data:", users)  # Debugging line to print all users
+
         for user in users:
-            formatted_users.append({
-                "phone": user.get("Phone", ""),  
-                "name": user.get("Name", ""),  
-                "referral_code": user.get("Referral code", ""),  
-                "referrals": int(user.get("Referrals", 0)),  
-                "heep_saved": user.get("Heep saved?", "Pending"),  # ✅ Include "Heep saved?"
-                "user_saved": user.get("User saved?", "Pending")   # ✅ Include "User saved?"
+            user_phone = user.get("Phone", "").strip()
+            total_referrals = int(user.get("Referrals", 0))
+
+            # Debugging: Print each user
+            print(f"👤 Checking {user.get('Name', 'Unknown')} (Phone: {user_phone})")
+
+            # Count pending referrals
+            pending_referrals = 0
+            for u in users:
+                if u.get("Referred By", "").strip() == user_phone:
+                    print(f"🔗 Found Referral: {u.get('Name', 'Unknown')} - Heep Saved: {u.get('Heep saved?')}, User Saved: {u.get('User saved?')}")  # Debugging
+
+                    if u.get("Heep saved?") == "Pending" or u.get("User saved?") == "Pending":
+                        pending_referrals += 1
+
+            print(f"📌 {user.get('Name', 'Unknown')} - Pending Referrals: {pending_referrals}")  # Debugging
+
+            processed_users.append({
+                "phone": user_phone,
+                "name": user.get("Name", "Unknown"),
+                "referral_code": user.get("Referral code", "").strip(),
+                "referrals": total_referrals,
+                "pending_referrals": pending_referrals
             })
 
-        return jsonify({"data": formatted_users})  
+        return jsonify({"data": processed_users})
+
     except Exception as e:
-        print(f"Error fetching users: {str(e)}")  
         return jsonify({"error": str(e)}), 500
+
 
 
 @app.route("/get_analytics")
@@ -428,10 +445,14 @@ def get_analytics():
             "6+ Referrals": 0
         }
         total_users = len(users)
+        total_pending_referrals = 0
 
+        # Count referral categories and pending referrals
         for user in users:
             num_referrals = int(user.get("Referrals", 0))
+            user_phone = user.get("Phone", "").strip()
 
+            # Categorize referral counts
             if num_referrals == 0:
                 referral_counts["0 Referrals"] += 1
             elif num_referrals <= 2:
@@ -441,36 +462,24 @@ def get_analytics():
             else:
                 referral_counts["6+ Referrals"] += 1
 
+            # Count pending referrals
+            for ref_user in users:
+                if ref_user.get("Referred By", "").strip() == user_phone:
+                    heep_saved = ref_user.get("Heep saved?", "").strip().lower()
+                    user_saved = ref_user.get("User saved?", "").strip().lower()
+
+                    if heep_saved != "verified" or user_saved != "verified":
+                        total_pending_referrals += 1
+
         return jsonify({
             "labels": list(referral_counts.keys()),
             "values": list(referral_counts.values()),
-            "total_users": total_users
+            "total_users": total_users,
+            "total_pending_referrals": total_pending_referrals
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route("/search_user")
-def search_user():
-    query = request.args.get("query", "").strip()
-    if not query:
-        return jsonify({"error": "No query provided"}), 400
-
-    users = sheet.get_all_records()
-    for user in users:
-        if user["Referral code"].lower() == query.lower() or user["Name"].lower() == query.lower():
-            referral_data = {
-                "labels": ["Jan", "Feb", "Mar", "Apr", "May"],  # Example months
-                "values": [1, 3, 5, 7, user.get("Referrals", 0)]  # Example growth
-            }
-            return jsonify({
-                "phone": user["Phone"],
-                "name": user["Name"],
-                "referral_code": user["Referral code"],
-                "referrals": user["Referrals"],
-                "referral_data": referral_data
-            })
-
-    return jsonify({"error": "User not found"}), 404
 
 
 @app.route("/get_new_users")
