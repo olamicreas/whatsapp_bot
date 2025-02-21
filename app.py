@@ -320,18 +320,25 @@ def autoresponder():
         print(f"👤 Extracted Name: {sender_name}")
         print(f"🔑 Extracted Referral Code: {referral_code}")
 
-        # Save referred contact to Google Contacts under the referrer’s referral code
+        # 🛠 **Find the referrer's phone number using the referral code**
+        users = sheet.get_all_records()
+        referrer = next((u for u in users if u.get("Referral code") == referral_code), None)
+
+        referrer_phone = referrer.get("Phone", "") if referrer else None
+        print(f"📞 Referrer Phone: {referrer_phone}")
+
+        # ✅ Save referred contact to Google Sheets
         contact_saved = save_to_google_contacts(sender_name, sender_phone, referral_code)
         print(f"📇 Contact Saved to Google: {contact_saved}")
 
         if contact_saved:
-            referral_code = save_to_google_sheets(sender_phone, sender_name, referral_code)
+            # ✅ **Pass the referrer’s phone number when saving the new user**
+            save_to_google_sheets(sender_phone, sender_name, referral_code, referrer_phone)
             update_user_saved_status(sender_phone, verified=True)
             update_heep_saved_status(sender_phone)
 
             # ✅ Check if Mr. Heep is saved by the referred user
             heep_saved_by_user = verify_heep_contact(vcard_contact)
-
 
             if heep_saved_by_user:
                 # ✅ Now both Mr. Heep and the user have each other saved, count referral
@@ -350,7 +357,7 @@ def autoresponder():
         Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
             
         🔹 *Click below to verify you have Mr. Heep's contact saved:*  
-        👉 [Click here to verify](https://wa.me/15551414043?text=verify)"""
+        👉 [Click here to verify](https://wa.me/YOUR_BOT_NUMBER?text=verify)"""
             else:
                 response_message = """You're welcome home 💙
         ✅ Your contact has been saved by Mr. Heep.  
@@ -358,10 +365,7 @@ def autoresponder():
         Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
             
         🔹 *Click below to verify you have Mr. Heep's contact saved:*  
-        👉 [Click here to verify](https://wa.me/15551414043?text=verify)"""
-
-
-        
+        👉 [Click here to verify](https://wa.me/YOUR_BOT_NUMBER?text=verify)"""
 
         else:
             response_message = "❌ Contact could not be saved. Please try again."
