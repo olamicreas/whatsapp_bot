@@ -332,26 +332,36 @@ def autoresponder():
             # ✅ Check if Mr. Heep is saved by the referred user
             heep_saved_by_user = verify_heep_contact(vcard_contact)
 
+
             if heep_saved_by_user:
                 # ✅ Now both Mr. Heep and the user have each other saved, count referral
                 if handle_referral_usage(referral_code, sender_phone, sender_name):
                     response_message = """You're welcome home 💙
-                    ✅ Your contact has been saved by Mr. Heep. Your referrer has been rewarded!
-                    Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
-                    🔹 *Click below to verify you have Mr. Heep's contact saved:*  
-                    👉 [Click here to verify](https://wa.me/YOUR_BOT_NUMBER?text=verify)"""
+            ✅ Your contact has been saved by Mr. Heep. Your referrer has been rewarded!
+            
+            Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
+            
+            🔹 *Click below to verify you have Mr. Heep's contact saved:*  
+            👉 [Click here to verify](https://wa.me/YOUR_BOT_NUMBER?text=verify)"""
                 else:
                     response_message = """You're welcome home 💙
-                    ✅ Your contact has been saved by Mr. Heep, but your referrer has not been rewarded yet. Please ensure both verifications are complete.
-                    Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
-                    🔹 *Click below to verify you have Mr. Heep's contact saved:*  
-                    👉 [Click here to verify](https://wa.me/YOUR_BOT_NUMBER?text=verify)"""
+            ✅ Your contact has been saved by Mr. Heep, but your referrer has not been rewarded yet. Please ensure both verifications are complete.
+            
+            Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
+            
+            🔹 *Click below to verify you have Mr. Heep's contact saved:*  
+            👉 [Click here to verify](https://wa.me/15551414043?text=verify)"""
             else:
                 response_message = """You're welcome home 💙
-                ✅ Your contact has been saved by Mr. Heep.  
-                Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
-                🔹 *Click below to verify you have Mr. Heep's contact saved:*  
-                👉 [Click here to verify](https://wa.me/YOUR_BOT_NUMBER?text=verify)"""
+            ✅ Your contact has been saved by Mr. Heep.  
+            
+            Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
+            
+            🔹 *Click below to verify you have Mr. Heep's contact saved:*  
+            👉 [Click here to verify](https://wa.me/15551414043?text=verify)"""
+
+
+        
 
         else:
             response_message = "❌ Contact could not be saved. Please try again."
