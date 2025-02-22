@@ -349,6 +349,10 @@ def autoresponder():
 
             if heep_saved_by_user:
                 if handle_referral_usage(referral_code_from_msg, sender_phone, sender_name):
+                    sender_phone = str(data["query"].get("sender", "")).strip().replace(" ", "")
+                    message_content = str(data["query"].get("message", "")).strip()
+                    referrer_phone = str(referrer.get("Phone", "")) if referrer else None
+
                     response_message = """You're welcome home 💙\n\n
         ✅ Your contact has been saved by Mr. Heep. Your referrer has been rewarded!\n\n
             
@@ -356,7 +360,7 @@ def autoresponder():
             
         🔹 *Click below to verify you have Mr. Heep's contact saved:*  \n\n
         👉 [Click here to verify](https://wa.me/15551414043?text=verify)"""
-                    response_message = response_message.strip()
+                   
 
                 else:
                     response_message = """You're welcome home 💙\n\n
@@ -366,8 +370,7 @@ def autoresponder():
             
         🔹 *Click below to verify you have Mr. Heep's contact saved:*  \n\n
         👉 [Click here to verify](https://wa.me/15551414043?text=verify)"""
-                    response_message = response_message.strip()
-
+                   
             else:
                 response_message = """You're welcome home 💙\n\n
         ✅ Your contact has been saved by Mr. Heep.\n\n  
@@ -376,7 +379,7 @@ def autoresponder():
             
         🔹 *Click below to verify you have Mr. Heep's contact saved:*  \n\n
         👉 [Click here to verify](https://wa.me/15551414043?text=verify)"""
-                response_message = response_message.strip()
+               
 
         else:
             response_message = "❌ Contact could not be saved. Please try again."
