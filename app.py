@@ -318,7 +318,6 @@ def autoresponder():
         # 🛠 **Find the referrer using the extracted referral code**
         users = sheet.get_all_records()
         referrer = next((u for u in users if u.get("Referral code", "") == referral_code_from_msg), None)
-
         referrer_phone = referrer.get("Phone", "") if referrer else None
 
         # 🚀 **Generate a new unique referral code for this user**
@@ -328,7 +327,14 @@ def autoresponder():
         contact_saved = save_to_google_contacts(sender_name, sender_phone, referral_code)
         if contact_saved:
             save_to_google_sheets(sender_phone, sender_name, referral_code, referrer_phone)
+            
+            # ✅ Mark referred user as "User saved?"
             update_user_saved_status(sender_phone, verified=True)
+            
+            # ✅ Mark referrer as "User saved?" if they exist
+            if referrer_phone:
+                update_user_saved_status(referrer_phone, verified=True)
+
             update_heep_saved_status(sender_phone)
 
             # ✅ Check if Mr. Heep is saved by the referred user
