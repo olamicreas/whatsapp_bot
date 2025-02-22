@@ -318,6 +318,7 @@ def autoresponder():
         # 🛠 **Find the referrer using the extracted referral code**
         users = sheet.get_all_records()
         referrer = next((u for u in users if u.get("Referral code", "") == referral_code_from_msg), None)
+
         referrer_phone = referrer.get("Phone", "") if referrer else None
 
         # 🚀 **Generate a new unique referral code for this user**
