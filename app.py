@@ -294,7 +294,6 @@ def autoresponder():
         print("📩 Incoming Autoresponder Data:", json.dumps(data, indent=2))  # Debugging
 
         if not data or "query" not in data:
-            print("⚠️ Invalid data received in autoresponder.")
             return jsonify({
                 "status": "error",
                 "message": "Invalid data received",
@@ -305,11 +304,7 @@ def autoresponder():
         message_content = data["query"].get("message", "").strip()
         vcard_contact = data["query"].get("vcard", {})  # Assuming vCard data is sent
 
-        print(f"📞 Extracted Sender Phone: {sender_phone}")
-        print(f"📝 Extracted Message Content: {message_content}")
-
         if not sender_phone or not message_content:
-            print("⚠️ Missing sender phone or message content.")
             return jsonify({
                 "status": "error",
                 "message": "Missing sender phone or message content",
@@ -317,24 +312,19 @@ def autoresponder():
             }), 400
 
         sender_name = extract_name(message_content)
-        referral_code = extract_referral_code(message_content)  # Extract referrer's code
+        referral_code_from_msg = extract_referral_code(message_content)  # Extract referrer's code
 
-        print(f"👤 Extracted Name: {sender_name}")
-        print(f"🔑 Extracted Referral Code: {referral_code}")
-
-        # 🛠 **Find the referrer's phone number using the referral code**
+        # 🛠 **Find the referrer using the extracted referral code**
         users = sheet.get_all_records()
-        referrer = next((u for u in users if u.get("Referral code") == referral_code), None)
-
+        referrer = next((u for u in users if u.get("Referral code") == referral_code_from_msg), None)
         referrer_phone = referrer.get("Phone", "") if referrer else None
-        print(f"📞 Referrer Phone: {referrer_phone}")
+
+        # 🚀 **Generate a new unique referral code for this user**
+        referral_code = generate_referral_code()
 
         # ✅ Save referred contact to Google Sheets
         contact_saved = save_to_google_contacts(sender_name, sender_phone, referral_code)
-        print(f"📇 Contact Saved to Google: {contact_saved}")
-
         if contact_saved:
-            # ✅ **Pass the referrer’s phone number when saving the new user**
             save_to_google_sheets(sender_phone, sender_name, referral_code, referrer_phone)
             update_user_saved_status(sender_phone, verified=True)
             update_heep_saved_status(sender_phone)
@@ -344,7 +334,7 @@ def autoresponder():
 
             if heep_saved_by_user:
                 # ✅ Now both Mr. Heep and the user have each other saved, count referral
-                if handle_referral_usage(referral_code, sender_phone, sender_name):
+                if handle_referral_usage(referral_code_from_msg, sender_phone, sender_name):
                     response_message = """You're welcome home 💙
         ✅ Your contact has been saved by Mr. Heep. Your referrer has been rewarded!
             
@@ -372,7 +362,6 @@ def autoresponder():
         else:
             response_message = "❌ Contact could not be saved. Please try again."
 
-        # ✅ Return JSON response with `replies` array for WhatsApp
         return jsonify({
             "status": "success",
             "message": f"Processed contact {sender_name} ({sender_phone})",
