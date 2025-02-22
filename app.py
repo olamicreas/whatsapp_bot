@@ -342,7 +342,7 @@ def autoresponder():
         Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
             
         🔹 *Click below to verify you have Mr. Heep's contact saved:*  
-        👉 [Click here to verify](https://wa.me/{BOT_NUMBER}?text=verify)"""
+        👉 [Click here to verify](https://wa.me/15551414043?text=verify)"""
                 else:
                     response_message = """You're welcome home 💙
         ✅ Your contact has been saved by Mr. Heep, but your referrer has not been rewarded yet. Please ensure both verifications are complete.
@@ -350,7 +350,7 @@ def autoresponder():
         Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
             
         🔹 *Click below to verify you have Mr. Heep's contact saved:*  
-        👉 [Click here to verify](https://wa.me/{BOT_NUMBER}?text=verify)"""
+        👉 [Click here to verify](https://wa.me/15551414043?text=verify)"""
             else:
                 response_message = """You're welcome home 💙
         ✅ Your contact has been saved by Mr. Heep.  
