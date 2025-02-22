@@ -114,7 +114,10 @@ def save_to_google_sheets(phone, name, referral_code=None, referrer_phone=None):
     today_date = datetime.today().strftime("%Y-%m-%d")  # Get today's date
 
     # If sheet is empty, create headers in the correct order
-
+    if not users:
+        headers = ["Phone", "Name", "Referral Code", "Referrals", "Heep Saved?", "User Saved?", "Date Joined", "Referred By"]
+        sheet.clear()
+        sheet.append_row(headers)
 
     # Check if the user already exists
     for user in users:
