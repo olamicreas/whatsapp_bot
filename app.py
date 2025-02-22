@@ -349,32 +349,32 @@ def autoresponder():
 
             if heep_saved_by_user:
                 if handle_referral_usage(referral_code_from_msg, sender_phone, sender_name):
-                    response_message = """You're welcome home 💙
-        ✅ Your contact has been saved by Mr. Heep. Your referrer has been rewarded!
+                    response_message = """You're welcome home 💙\n\n
+        ✅ Your contact has been saved by Mr. Heep. Your referrer has been rewarded!\n\n
             
-        Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
+        Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.\n\n
             
-        🔹 *Click below to verify you have Mr. Heep's contact saved:*  
+        🔹 *Click below to verify you have Mr. Heep's contact saved:*  \n\n
         👉 [Click here to verify](https://wa.me/15551414043?text=verify)"""
                     response_message = response_message.strip()
 
                 else:
-                    response_message = """You're welcome home 💙
-        ✅ Your contact has been saved by Mr. Heep, but your referrer has not been rewarded yet. Please ensure both verifications are complete.
+                    response_message = """You're welcome home 💙\n\n
+        ✅ Your contact has been saved by Mr. Heep, but your referrer has not been rewarded yet. Please ensure both verifications are complete.\n\n
             
-        Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
+        Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.\n\n
             
-        🔹 *Click below to verify you have Mr. Heep's contact saved:*  
+        🔹 *Click below to verify you have Mr. Heep's contact saved:*  \n\n
         👉 [Click here to verify](https://wa.me/15551414043?text=verify)"""
                     response_message = response_message.strip()
 
             else:
-                response_message = """You're welcome home 💙
-        ✅ Your contact has been saved by Mr. Heep.  
+                response_message = """You're welcome home 💙\n\n
+        ✅ Your contact has been saved by Mr. Heep.\n\n  
             
-        Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
+        Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.\n\n
             
-        🔹 *Click below to verify you have Mr. Heep's contact saved:*  
+        🔹 *Click below to verify you have Mr. Heep's contact saved:*  \n\n
         👉 [Click here to verify](https://wa.me/15551414043?text=verify)"""
                 response_message = response_message.strip()
 
