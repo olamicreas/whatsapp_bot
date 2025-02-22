@@ -44,6 +44,7 @@ REDIRECT_URI = "https://referral-contest.onrender.com/"
 # ✅ Mr. Heep's phone number
 MR_HEEP_PHONE = "2347010528330"
 VERIFY_TOKEN = "my_verify_token"
+BOT_NUMBER = "15551414043"
 
 app = Flask(__name__)
 
@@ -341,7 +342,7 @@ def autoresponder():
         Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
             
         🔹 *Click below to verify you have Mr. Heep's contact saved:*  
-        👉 [Click here to verify](https://wa.me/YOUR_BOT_NUMBER?text=verify)"""
+        👉 [Click here to verify](https://wa.me/{BOT_NUMBER}?text=verify)"""
                 else:
                     response_message = """You're welcome home 💙
         ✅ Your contact has been saved by Mr. Heep, but your referrer has not been rewarded yet. Please ensure both verifications are complete.
@@ -349,7 +350,7 @@ def autoresponder():
         Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
             
         🔹 *Click below to verify you have Mr. Heep's contact saved:*  
-        👉 [Click here to verify](https://wa.me/YOUR_BOT_NUMBER?text=verify)"""
+        👉 [Click here to verify](https://wa.me/{BOT_NUMBER}?text=verify)"""
             else:
                 response_message = """You're welcome home 💙
         ✅ Your contact has been saved by Mr. Heep.  
@@ -357,7 +358,7 @@ def autoresponder():
         Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
             
         🔹 *Click below to verify you have Mr. Heep's contact saved:*  
-        👉 [Click here to verify](https://wa.me/YOUR_BOT_NUMBER?text=verify)"""
+        👉 [Click here to verify](https://wa.me/{BOT_NUMBER}?text=verify)"""
 
         else:
             response_message = "❌ Contact could not be saved. Please try again."
