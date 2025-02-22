@@ -358,7 +358,7 @@ def autoresponder():
         Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.
             
         🔹 *Click below to verify you have Mr. Heep's contact saved:*  
-        👉 [Click here to verify](https://wa.me/{BOT_NUMBER}?text=verify)"""
+        👉 [Click here to verify](https://wa.me/15551414043?text=verify)"""
 
         else:
             response_message = "❌ Contact could not be saved. Please try again."
