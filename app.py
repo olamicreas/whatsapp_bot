@@ -303,7 +303,7 @@ def autoresponder():
 
         sender_phone = data["query"].get("sender", "").strip().replace(" ", "")
         message_content = data["query"].get("message", "").strip()
-        vcard_contact = data["query"].get("vcard", {})  # Assuming vCard data is sent
+        vcard_contact = data["query"].get("vcard", {})
 
         if not sender_phone or not message_content:
             return jsonify({
@@ -313,12 +313,14 @@ def autoresponder():
             }), 400
 
         sender_name = extract_name(message_content)
-        referral_code_from_msg = extract_referral_code(message_content)  # Extract referrer's code
+        referral_code_from_msg = extract_referral_code(message_content)
 
         # 🛠 **Find the referrer using the extracted referral code**
         users = sheet.get_all_records()
-        referrer = next((u for u in users if u.get("Referral code", "") == referral_code_from_msg), None)
-        referrer_phone = referrer.get("Phone", "") if referrer else None
+        referrer = next((u for u in users if u.get("Referral code", "").strip() == referral_code_from_msg), None)
+        referrer_phone = referrer.get("Phone", "").strip() if referrer else None
+
+        print(f"🔎 Extracted referrer phone: {referrer_phone}")  # Debugging
 
         # 🚀 **Generate a new unique referral code for this user**
         referral_code = generate_referral_code()
@@ -327,13 +329,18 @@ def autoresponder():
         contact_saved = save_to_google_contacts(sender_name, sender_phone, referral_code)
         if contact_saved:
             save_to_google_sheets(sender_phone, sender_name, referral_code, referrer_phone)
-            
+
             # ✅ Mark referred user as "User saved?"
             update_user_saved_status(sender_phone, verified=True)
-            
+
             # ✅ Mark referrer as "User saved?" if they exist
             if referrer_phone:
-                update_user_saved_status(referrer_phone, verified=True)
+                print(f"✅ Updating referrer {referrer_phone} to Verified")  # Debugging
+                updated = update_user_saved_status(referrer_phone, verified=True)
+                if updated:
+                    print(f"✅ Successfully verified referrer {referrer_phone}")
+                else:
+                    print(f"⚠️ Failed to verify referrer {referrer_phone}")
 
             update_heep_saved_status(sender_phone)
 
@@ -341,7 +348,6 @@ def autoresponder():
             heep_saved_by_user = verify_heep_contact(vcard_contact)
 
             if heep_saved_by_user:
-                # ✅ Now both Mr. Heep and the user have each other saved, count referral
                 if handle_referral_usage(referral_code_from_msg, sender_phone, sender_name):
                     response_message = """You're welcome home 💙
         ✅ Your contact has been saved by Mr. Heep. Your referrer has been rewarded!
@@ -350,6 +356,8 @@ def autoresponder():
             
         🔹 *Click below to verify you have Mr. Heep's contact saved:*  
         👉 [Click here to verify](https://wa.me/15551414043?text=verify)"""
+                    response_message = response_message.strip()
+
                 else:
                     response_message = """You're welcome home 💙
         ✅ Your contact has been saved by Mr. Heep, but your referrer has not been rewarded yet. Please ensure both verifications are complete.
@@ -358,6 +366,8 @@ def autoresponder():
             
         🔹 *Click below to verify you have Mr. Heep's contact saved:*  
         👉 [Click here to verify](https://wa.me/15551414043?text=verify)"""
+                    response_message = response_message.strip()
+
             else:
                 response_message = """You're welcome home 💙
         ✅ Your contact has been saved by Mr. Heep.  
@@ -366,6 +376,7 @@ def autoresponder():
             
         🔹 *Click below to verify you have Mr. Heep's contact saved:*  
         👉 [Click here to verify](https://wa.me/15551414043?text=verify)"""
+                response_message = response_message.strip()
 
         else:
             response_message = "❌ Contact could not be saved. Please try again."
