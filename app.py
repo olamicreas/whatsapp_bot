@@ -90,9 +90,9 @@ def extract_name(message):
     return match.group(1).strip() if match else "Unknown"
 
 def extract_referral_code(message):
-    # Regex pattern to capture a referral code, e.g., "REF101"
     match = re.search(r"REF\d+", message)
-    return match.group(0) if match else None
+    return match.group(0) if match else None  # Return None if no match
+
 
 
 # Function to generate a unique referral code
@@ -317,7 +317,7 @@ def autoresponder():
 
         # 🛠 **Find the referrer using the extracted referral code**
         users = sheet.get_all_records()
-        referrer = next((u for u in users if u.get("Referral code") == referral_code_from_msg), None)
+        referrer = next((u for u in users if u.get("Referral code", "") == referral_code_from_msg), None)
         referrer_phone = referrer.get("Phone", "") if referrer else None
 
         # 🚀 **Generate a new unique referral code for this user**
