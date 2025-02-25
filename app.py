@@ -402,29 +402,19 @@ def autoresponder():
 
             if heep_saved_by_user:
                 if handle_referral_usage(referral_code_from_msg, sender_phone, sender_name):
-                    response_message = """Welcome! 😊
-                    Thank you for joining our community.
-                    	•	Your contact has been successfully saved.
-                    	•	To stay updated with our daily news and engaging content, please save our contact as “MR HEEP”.
-                    	•	Click the link below to verify that you have saved our contact:
-                    👉 [Click here to verify](https://wa.me/2348066850927?text=verify)"""
+                    response_message = "Welcome😊!\n\nThank you for joining our community.\n\n• Your contact has been successfully saved.\n\n• To stay updated with our daily news and engaging content, please save our contact as “MR HEEP”.\n\n• Click the link below to verify that you have saved our contact:\n\n👉 [Click here to verify](https://wa.me/2348066850927?text=verify)"
+
 
 
                 else:
-                    response_message = """Welcome! 😊
-                    Thank you for joining our community.
-                    	•	Your contact has been successfully saved.
-                    	•	To stay updated with our daily news and engaging content, please save our contact as “MR HEEP”.
-                    	•	Click the link below to verify that you have saved our contact:
-                    👉 [Click here to verify](https://wa.me/2348066850927?text=verify)"""
+                    response_message = "Welcome😊!\n\nThank you for joining our community.\n\n• Your contact has been successfully saved.\n\n• To stay updated with our daily news and engaging content, please save our contact as “MR HEEP”.\n\n• Click the link below to verify that you have saved our contact:\n\n👉 [Click here to verify](https://wa.me/2348066850927?text=verify)"
+
+                    
 
             else:
-                    response_message = """Welcome! 😊
-                    Thank you for joining our community.
-                    	•	Your contact has been successfully saved.
-                    	•	To stay updated with our daily news and engaging content, please save our contact as “MR HEEP”.
-                    	•	Click the link below to verify that you have saved our contact:
-                    👉 [Click here to verify](https://wa.me/2348066850927?text=verify)"""
+                response_message = "Welcome😊!\n\nThank you for joining our community.\n\n• Your contact has been successfully saved.\n\n• To stay updated with our daily news and engaging content, please save our contact as “MR HEEP”.\n\n• Click the link below to verify that you have saved our contact:\n\n👉 [Click here to verify](https://wa.me/2348066850927?text=verify)"
+
+                
 
         else:
             response_message = "❌ Contact could not be saved. Please try again."
