@@ -177,32 +177,58 @@ def update_heep_saved_status(phone):
 
 
 # Function to handle referral usage
-def handle_referral_usage(referral_code, referred_phone, referred_name):
+def handle_referral_usage_by_referred(referred_phone):
+    """
+    When a user (the referred user) completes verification (both "Heep Saved?" 
+    and "User Saved?" are marked as Verified), this function checks their record 
+    for the "Referred By" phone number. It then finds the referrer's record 
+    and increments the referral count (stored in the "Referrals" column) for that referrer.
+    
+    Parameters:
+      referred_phone (str): The phone number of the referred user who just completed verification.
+    
+    Returns:
+      True if the referral count was updated, False otherwise.
+    """
     users = sheet.get_all_records()
-
-    # Find the correct referrer (the one whose referral code was used)
-    referrer = next((user for user in users if user["Referral code"] == referral_code), None)
-    # Find the referred user (the one who sent "start" and now verified Mr. Heep's contact)
+    
+    # Find the referred user's record using their phone number
     referred_user = next((user for user in users if str(user["Phone"]).strip() == referred_phone), None)
-
-    if referrer and referred_user:
-        referrer_row = users.index(referrer) + 2  # Row in Google Sheets
-        referred_row = users.index(referred_user) + 2
-
-        heep_saved_status = sheet.cell(referred_row, 5).value  # "Heep saved?" column
-        user_saved_status = sheet.cell(referred_row, 6).value  # "User saved?" column
-
-        if heep_saved_status == "Verified" and user_saved_status == "Verified":
-            new_referral_count = int(sheet.cell(referrer_row, 4).value) + 1  # Column 4: referral count
-            sheet.update_cell(referrer_row, 4, new_referral_count)
-            print(f"✅ Referral counted for {referrer['Name']} ({referral_code}). New count: {new_referral_count}")
-            return True
-        else:
-            print("⚠️ Referral not counted. Both verifications are required.")
-            return False
-    else:
-        print("⚠️ Referrer or referred user not found.")
+    if not referred_user:
+        print("⚠️ Referred user not found.")
         return False
+
+    # Retrieve the referrer's phone number from the "Referred By" column of the referred user's record
+    referrer_phone = referred_user.get("Referred By", "").strip()
+    if not referrer_phone:
+        print("⚠️ No referrer found for this user.")
+        return False
+
+    # Find the referrer's record using the referrer's phone number
+    referrer = next((user for user in users if str(user["Phone"]).strip() == referrer_phone), None)
+    if not referrer:
+        print("⚠️ Referrer record not found.")
+        return False
+
+    # Get the row indices (note: Google Sheets rows are 1-indexed with row 1 as header)
+    referred_row = users.index(referred_user) + 2
+    referrer_row = users.index(referrer) + 2
+
+    # Check if both verification statuses for the referred user are complete
+    heep_saved_status = sheet.cell(referred_row, 5).value  # Column 5: "Heep Saved?"
+    user_saved_status = sheet.cell(referred_row, 6).value  # Column 6: "User Saved?"
+
+    if heep_saved_status == "Verified" and user_saved_status == "Verified":
+        # Increment the referral count for the referrer (Column 4: Referrals)
+        current_count = int(sheet.cell(referrer_row, 4).value)
+        new_referral_count = current_count + 1
+        sheet.update_cell(referrer_row, 4, new_referral_count)
+        print(f"✅ Referral counted for referrer {referrer['Name']} ({referrer_phone}). New count: {new_referral_count}")
+        return True
+    else:
+        print("⚠️ Referral not counted because the referred user's verifications are not complete.")
+        return False
+
 
 
 def get_referral_code_by_phone(phone):
@@ -291,27 +317,24 @@ def whatsapp_webhook():
                         send_whatsapp_message(sender_phone, "📩 Please send Mr. Heep’s contact as a vCard to verify.\n\nFollow these steps to send a contact card:\n1️⃣ Tap the + (iPhone) or 📎 (Android) icon.\n2️⃣ Select 'Contact'.\n3️⃣ Choose 'Mr. Heep' and send.\n\n✅ Done! We will verify it shortly.")
 
                 elif message_type == "contacts":
-                    # Handle vCard contact verification
-                    vcard_contact = message["contacts"][0]
+                   
+                    vcard_contact = message["contacts"][0]  # Extract vCard contact
                     heep_verified = verify_heep_contact(vcard_contact)
-
+                
                     if heep_verified:
-                        # Update the verification statuses for the sender in the sheet
+                        # Update verification statuses for the sender (the referred user)
                         update_heep_saved_status(sender_phone, verified=True)
-                        update_user_saved_status(sender_phone, verified=True)  # If you want to mark the user as verified
+                        update_user_saved_status(sender_phone, verified=True)
                         send_whatsapp_message(sender_phone, "✅ Verification successful! Mr. Heep’s contact has been saved.")
-
-                        # Now, retrieve the referral code and update referral count
-                        referral_code = get_referral_code_by_phone(sender_phone)
-                        if referral_code:
-                            if handle_referral_usage(referral_code, sender_phone, sender_name):
-                                print("Referral count updated successfully.")
-                            else:
-                                print("Referral count not updated.")
+                
+                        # Now update the referral count for the referrer using the "Referred By" information
+                        if handle_referral_usage_by_referred(sender_phone):
+                            print("Referral count updated successfully.")
                         else:
-                            print("No referral code found for this sender.")
+                            print("Referral count not updated.")
                     else:
                         send_whatsapp_message(sender_phone, "❌ Verification failed. Please make sure you’ve saved Mr. Heep’s contact correctly.")
+
 
     return jsonify({"status": "success"}), 200
 
