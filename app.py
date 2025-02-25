@@ -179,7 +179,7 @@ def update_heep_saved_status(phone):
 # Function to handle referral usage
 def handle_referral_usage_by_referred(referred_phone):
     """
-    When a user (the referred user) completes verification (both "Heep Saved?" 
+    When a referred user completes verification (both "Heep Saved?" 
     and "User Saved?" are marked as Verified), this function checks their record 
     for the "Referred By" phone number. It then finds the referrer's record 
     and increments the referral count (stored in the "Referrals" column) for that referrer.
@@ -198,7 +198,7 @@ def handle_referral_usage_by_referred(referred_phone):
         print("⚠️ Referred user not found.")
         return False
 
-    # Retrieve the referrer's phone number from the "Referred By" column of the referred user's record
+    # Retrieve the referrer's phone number from the "Referred By" column
     referrer_phone = referred_user.get("Referred By", "").strip()
     if not referrer_phone:
         print("⚠️ No referrer found for this user.")
@@ -210,17 +210,29 @@ def handle_referral_usage_by_referred(referred_phone):
         print("⚠️ Referrer record not found.")
         return False
 
-    # Get the row indices (note: Google Sheets rows are 1-indexed with row 1 as header)
+    # Get the row indices (Google Sheets is 1-indexed with row 1 as header)
     referred_row = users.index(referred_user) + 2
     referrer_row = users.index(referrer) + 2
+
+    # Debug prints for row indices and current referral count
+    print("DEBUG: Referred row:", referred_row, "| Referrer row:", referrer_row)
+    current_referral_value = sheet.cell(referrer_row, 4).value
+    print("DEBUG: Current referral count (raw):", current_referral_value)
+    
+    try:
+        current_count = int(current_referral_value)
+    except Exception as e:
+        print("⚠️ Error converting current referral count to int:", e)
+        return False
 
     # Check if both verification statuses for the referred user are complete
     heep_saved_status = sheet.cell(referred_row, 5).value  # Column 5: "Heep Saved?"
     user_saved_status = sheet.cell(referred_row, 6).value  # Column 6: "User Saved?"
+    
+    print("DEBUG: Heep Saved status:", heep_saved_status)
+    print("DEBUG: User Saved status:", user_saved_status)
 
     if heep_saved_status == "Verified" and user_saved_status == "Verified":
-        # Increment the referral count for the referrer (Column 4: Referrals)
-        current_count = int(sheet.cell(referrer_row, 4).value)
         new_referral_count = current_count + 1
         sheet.update_cell(referrer_row, 4, new_referral_count)
         print(f"✅ Referral counted for referrer {referrer['Name']} ({referrer_phone}). New count: {new_referral_count}")
@@ -328,10 +340,12 @@ def whatsapp_webhook():
                         send_whatsapp_message(sender_phone, "✅ Verification successful! Mr. Heep’s contact has been saved.")
                 
                         # Now update the referral count for the referrer using the "Referred By" information
-                        if handle_referral_usage_by_referred(sender_phone):
+                        normalized_sender = normalize_phone_number(sender_phone)
+                        if handle_referral_usage_by_referred(normalized_sender):
                             print("Referral count updated successfully.")
                         else:
                             print("Referral count not updated.")
+                        
                     else:
                         send_whatsapp_message(sender_phone, "❌ Verification failed. Please make sure you’ve saved Mr. Heep’s contact correctly.")
 
