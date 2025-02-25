@@ -402,7 +402,7 @@ def autoresponder():
 
             if heep_saved_by_user:
                 if handle_referral_usage(referral_code_from_msg, sender_phone, sender_name):
-                    response_message = """Welcome!
+                    response_message = """Welcome! 😊
                     Thank you for joining our community.
                     	•	Your contact has been successfully saved.
                     	•	To stay updated with our daily news and engaging content, please save our contact as “MR HEEP”.
@@ -411,7 +411,7 @@ def autoresponder():
 
 
                 else:
-                    response_message = """Welcome!
+                    response_message = """Welcome! 😊
                     Thank you for joining our community.
                     	•	Your contact has been successfully saved.
                     	•	To stay updated with our daily news and engaging content, please save our contact as “MR HEEP”.
@@ -419,7 +419,7 @@ def autoresponder():
                     👉 [Click here to verify](https://wa.me/2348066850927?text=verify)"""
 
             else:
-                    response_message = """Welcome!
+                    response_message = """Welcome! 😊
                     Thank you for joining our community.
                     	•	Your contact has been successfully saved.
                     	•	To stay updated with our daily news and engaging content, please save our contact as “MR HEEP”.
