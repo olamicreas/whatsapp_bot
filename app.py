@@ -178,57 +178,44 @@ def update_heep_saved_status(phone):
 
 # Function to handle referral usage
 def handle_referral_usage_by_referred(referred_phone):
-    """
-    When a referred user completes verification (both "Heep Saved?" 
-    and "User Saved?" are marked as Verified), this function checks their record 
-    for the "Referred By" phone number. It then finds the referrer's record 
-    and increments the referral count (stored in the "Referrals" column) for that referrer.
-    
-    Parameters:
-      referred_phone (str): The phone number of the referred user who just completed verification.
-    
-    Returns:
-      True if the referral count was updated, False otherwise.
-    """
+    # Normalize the referred phone before comparing
+    referred_phone_norm = normalize_phone_number(referred_phone)
     users = sheet.get_all_records()
     
-    # Find the referred user's record using their phone number
-    referred_user = next((user for user in users if str(user["Phone"]).strip() == referred_phone), None)
+    # Find the referred user's record using normalized phone numbers
+    referred_user = next((user for user in users if normalize_phone_number(user["Phone"]) == referred_phone_norm), None)
     if not referred_user:
         print("⚠️ Referred user not found.")
         return False
 
-    # Retrieve the referrer's phone number from the "Referred By" column
-    referrer_phone = referred_user.get("Referred By", "").strip()
+    # Retrieve the referrer's phone number and normalize it
+    referrer_phone = normalize_phone_number(referred_user.get("Referred By", "").strip())
     if not referrer_phone:
         print("⚠️ No referrer found for this user.")
         return False
 
-    # Find the referrer's record using the referrer's phone number
-    referrer = next((user for user in users if str(user["Phone"]).strip() == referrer_phone), None)
+    # Find the referrer's record using the normalized referrer's phone number
+    referrer = next((user for user in users if normalize_phone_number(user["Phone"]) == referrer_phone), None)
     if not referrer:
         print("⚠️ Referrer record not found.")
         return False
 
-    # Get the row indices (Google Sheets is 1-indexed with row 1 as header)
     referred_row = users.index(referred_user) + 2
     referrer_row = users.index(referrer) + 2
 
-    # Debug prints for row indices and current referral count
     print("DEBUG: Referred row:", referred_row, "| Referrer row:", referrer_row)
     current_referral_value = sheet.cell(referrer_row, 4).value
     print("DEBUG: Current referral count (raw):", current_referral_value)
-    
+
     try:
         current_count = int(current_referral_value)
     except Exception as e:
         print("⚠️ Error converting current referral count to int:", e)
         return False
 
-    # Check if both verification statuses for the referred user are complete
-    heep_saved_status = sheet.cell(referred_row, 5).value  # Column 5: "Heep Saved?"
-    user_saved_status = sheet.cell(referred_row, 6).value  # Column 6: "User Saved?"
-    
+    heep_saved_status = sheet.cell(referred_row, 5).value
+    user_saved_status = sheet.cell(referred_row, 6).value
+
     print("DEBUG: Heep Saved status:", heep_saved_status)
     print("DEBUG: User Saved status:", user_saved_status)
 
@@ -240,6 +227,7 @@ def handle_referral_usage_by_referred(referred_phone):
     else:
         print("⚠️ Referral not counted because the referred user's verifications are not complete.")
         return False
+
 
 
 
@@ -414,25 +402,29 @@ def autoresponder():
 
             if heep_saved_by_user:
                 if handle_referral_usage(referral_code_from_msg, sender_phone, sender_name):
-                    response_message = """You're welcome home 💙  
-✅ Your contact has been saved by Mr. Heep. Your referrer has been rewarded!  
-Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.  
-🔹 *Click below to verify you have Mr. Heep's contact saved:*  
-👉 [Click here to verify](https://wa.me/2348066850927?text=verify)"""
+                    response_message = """Welcome!
+                    Thank you for joining our community.
+                    	•	Your contact has been successfully saved.
+                    	•	To stay updated with our daily news and engaging content, please save our contact as “MR HEEP”.
+                    	•	Click the link below to verify that you have saved our contact:
+                    👉 [Click here to verify](https://wa.me/2348066850927?text=verify)"""
+
 
                 else:
-                    response_message = """You're welcome home 💙  
-✅ Your contact has been saved by Mr. Heep, but your referrer has not been rewarded yet. Please ensure both verifications are complete.  
-Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.  
-🔹 *Click below to verify you have Mr. Heep's contact saved:*  
-👉 [Click here to verify](https://wa.me/2348066850927?text=verify)"""
+                    response_message = """Welcome!
+                    Thank you for joining our community.
+                    	•	Your contact has been successfully saved.
+                    	•	To stay updated with our daily news and engaging content, please save our contact as “MR HEEP”.
+                    	•	Click the link below to verify that you have saved our contact:
+                    👉 [Click here to verify](https://wa.me/2348066850927?text=verify)"""
 
             else:
-                response_message = """You're welcome home 💙  
-✅ Your contact has been saved by Mr. Heep.  
-Kindly save our contact as "MR HEEP" to enjoy our daily news and relatable content.  
-🔹 *Click below to verify you have Mr. Heep's contact saved:*  
-👉 [Click here to verify](https://wa.me/2348066850927?text=verify)"""
+                    response_message = """Welcome!
+                    Thank you for joining our community.
+                    	•	Your contact has been successfully saved.
+                    	•	To stay updated with our daily news and engaging content, please save our contact as “MR HEEP”.
+                    	•	Click the link below to verify that you have saved our contact:
+                    👉 [Click here to verify](https://wa.me/2348066850927?text=verify)"""
 
         else:
             response_message = "❌ Contact could not be saved. Please try again."
