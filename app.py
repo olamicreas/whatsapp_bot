@@ -246,6 +246,19 @@ def update_user_saved_status(phone, verified=False):
 
 @app.route("/webhook", methods=["POST", "GET"])
 def whatsapp_webhook():
+    
+    if request.method == 'GET':
+        # Facebook/WhatsApp sends a GET request for verification
+        token = request.args.get('hub.verify_token')
+        challenge = request.args.get('hub.challenge')
+        if token and challenge:
+            if token == VERIFY_TOKEN:
+                # Respond with the challenge token from the request
+                return challenge, 200
+            else:
+                return "Invalid verification token", 403
+        else:
+            return "Missing query parameters", 400
     data = request.get_json()
     print("📩 Incoming Webhook Data:", json.dumps(data, indent=2))  # Debugging
 
