@@ -122,7 +122,7 @@ def save_to_google_sheets(phone, name, referral_code=None, referrer_phone=None):
     # Check if the user already exists
     for user in users:
         if str(user.get("Phone", "")).strip() == phone:
-            return user["Referral Code"]  # Return existing referral code (Don't overwrite)
+            return user["Referral code"]  # Return existing referral code (Don't overwrite)
 
     # If referral_code is None, the user wasn't referred, so generate a new referral code
     if not referral_code:
