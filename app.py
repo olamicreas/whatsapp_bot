@@ -44,7 +44,7 @@ REDIRECT_URI = "https://referral-contest.onrender.com/"
 # ✅ Mr. Heep's phone number
 MR_HEEP_PHONE = "2347010528330"
 VERIFY_TOKEN = "my_verify_token"
-BOT_NUMBER = "15551414043"
+BOT_NUMBER = "2348066850927"
 
 app = Flask(__name__)
 
