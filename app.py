@@ -241,7 +241,10 @@ def get_referral_code_by_phone(phone):
 
     
 def normalize_phone_number(phone):
-    return re.sub(r"\D", "", phone)  # Remove non-digit characters
+    if not phone:
+        return ""
+    return re.sub(r"\D", "", str(phone))
+
 
 def verify_heep_contact(vcard_contact):
     heep_official_phone = normalize_phone_number(MR_HEEP_PHONE)
