@@ -244,7 +244,7 @@ def update_user_saved_status(phone, verified=False):
     return False
 
 
-@app.route("/webhook", methods=["POST"])
+@app.route("/webhook", methods=["POST", "GET"])
 def whatsapp_webhook():
     data = request.get_json()
     print("📩 Incoming Webhook Data:", json.dumps(data, indent=2))  # Debugging
