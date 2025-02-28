@@ -319,12 +319,13 @@ def whatsapp_webhook():
                     elif message_text == "verify":
                         send_whatsapp_message(sender_phone, "📩 Please send Mr. Heep’s contact as a vCard to verify.\n\nFollow these steps to send a contact card:\n1️⃣ Tap the + (iPhone) or 📎 (Android) icon.\n2️⃣ Select 'Contact'.\n3️⃣ Choose 'Mr. Heep' and send.\n\n✅ Done! We will verify it shortly.")
                     elif message_text == "guidelines":
-                            send_whatsapp_message(sender_phone, "📌 *Referral Program Guidelines:*\n\n"
-                                                                "✅ After getting your referral link, *share it everywhere* to get referrals.\n"
-                                                                "✅ Your referrals *must* verify they have saved Mr. Heep’s contact.\n"
-                                                                "✅ To verify, they should send *VERIFY* to the bot and follow the steps.\n"
-                                                                "✅ Once verification is successful, your referral count will increase.\n\n"
-                                                                "🚀 Start referring now and grow your network!")
+                        
+                        send_whatsapp_message(sender_phone, "📌 *Referral Program Guidelines:*\n\n"
+                                                            "•⁠  ⁠Once you receive your unique referral link, share it widely to invite referrals.\n"
+                                                            "•⁠  ⁠Your referrals must verify that they have saved Mr. Heep’s contact.\n"
+                                                            "•⁠  ⁠To complete verification, they should send “VERIFY” to the bot and follow the instructions.\n"
+                                                            "•⁠  ⁠Upon successful verification, your referral count will automatically update.\n\n"
+                                                            "Start referring today and keep earning—we are rooting for you! 💙")
 
                 elif message_type == "contacts":
                    
