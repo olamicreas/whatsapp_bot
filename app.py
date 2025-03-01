@@ -296,7 +296,6 @@ def update_user_saved_status(phone, verified=False):
             return True
     return False
 
-
 @app.route("/webhook", methods=["POST", "GET"])
 def whatsapp_webhook():
     if request.method == 'GET':
@@ -313,6 +312,19 @@ def whatsapp_webhook():
             
     data = request.get_json()
     print("📩 Incoming Webhook Data:", json.dumps(data, indent=2))  # Debugging
+
+    TERMS_AND_CONDITIONS = """📜 *Terms & Conditions* 📜
+
+By participating in this referral program, you agree to the following:
+
+1️⃣ You must use a valid phone number and name.  
+2️⃣ Referrals count only if both users save each other's contacts.  
+3️⃣ You must not delete *Mr. Heep’s* contact after saving it.  
+4️⃣ Any attempt to manipulate referrals will result in disqualification.  
+5️⃣ The organizer reserves the right to modify the program at any time.  
+
+Reply *AGREE* to continue.
+"""
 
     for entry in data.get("entry", []):
         for change in entry.get("changes", []):
@@ -339,8 +351,8 @@ def whatsapp_webhook():
 
                     elif message_text == "verify":
                         send_whatsapp_message(sender_phone, "📩 Please send Mr. Heep’s contact as a vCard to verify.\n\nFollow these steps to send a contact card:\n1️⃣ Tap the + (iPhone) or 📎 (Android) icon.\n2️⃣ Select 'Contact'.\n3️⃣ Choose 'Mr. Heep' and send.\n\n✅ Done! We will verify it shortly.")
+
                     elif message_text == "guidelines":
-                        
                         send_whatsapp_message(sender_phone, "📌 *Referral Program Guidelines:*\n\n"
                                                             "•⁠  ⁠Once you receive your unique referral link, share it widely to invite referrals.\n"
                                                             "•⁠  ⁠Your referrals must verify that they have saved Mr. Heep’s contact.\n"
@@ -348,8 +360,10 @@ def whatsapp_webhook():
                                                             "•⁠  ⁠Upon successful verification, your referral count will automatically update.\n\n"
                                                             "Start referring today and keep earning—we are rooting for you! 💙")
 
+                    elif message_text == "t&c":
+                        send_whatsapp_message(sender_phone, TERMS_AND_CONDITIONS)
+
                 elif message_type == "contacts":
-                   
                     vcard_contact = message["contacts"][0]  # Extract vCard contact
                     heep_verified = verify_heep_contact(vcard_contact)
                 
@@ -369,8 +383,8 @@ def whatsapp_webhook():
                     else:
                         send_whatsapp_message(sender_phone, "❌ Verification failed. Please make sure you’ve saved Mr. Heep’s contact correctly.")
 
-
     return jsonify({"status": "success"}), 200
+
 
 
 @app.route("/autoresponder", methods=["POST", "GET"])
