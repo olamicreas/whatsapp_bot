@@ -49,7 +49,7 @@ TOKEN_PICKLE = "token.pickle"
 app = Flask(__name__)
 
 def get_refresh_token():
-    flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, PEOPLE_API_SCOPES)
+    flow = InstalledAppFlow.from_client_secrets_file("client_secret_258863544208-vu84m7tuf9j99s10his372sobabqebjs.apps.googleusercontent.com.json", PEOPLE_API_SCOPES)
     creds = flow.run_console()  # Use `run_console()` to manually authenticate once
 
     with open("token.pickle", "wb") as token:
