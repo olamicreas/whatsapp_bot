@@ -45,23 +45,42 @@ REDIRECT_URI = "https://referral-contest.onrender.com/"
 MR_HEEP_PHONE = "2347010528330"
 VERIFY_TOKEN = "my_verify_token"
 BOT_NUMBER = "+2348066850927"
-
+TOKEN_PICKLE = "token.pickle"
 app = Flask(__name__)
+
+def get_refresh_token():
+    flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, PEOPLE_API_SCOPES)
+    creds = flow.run_console()  # Use `run_console()` to manually authenticate once
+
+    with open("token.pickle", "wb") as token:
+        pickle.dump(creds, token)
+
+    print("✅ Refresh token saved! Now your script can run without manual login.")
+
+get_refresh_token()
 
 def authenticate():
     creds = None
-    if os.path.exists("token.pickle"):
-        with open("token.pickle", "rb") as token:
-            creds = pickle.load(token)
-    
-    if not creds or not creds.valid:
-        flow = InstalledAppFlow.from_client_secrets_file(
-            "client_secret_258863544208-vu84m7tuf9j99s10his372sobabqebjs.apps.googleusercontent.com.json", PEOPLE_API_SCOPES, redirect_uri=REDIRECT_URI
-        )
-        #creds = flow.run_local_server(port=8080)  # Ensure the port matches the redirect URI
 
-        with open("token.pickle", "wb") as token:
-            pickle.dump(creds, token)
+    # ✅ Load saved credentials
+    if os.path.exists(TOKEN_PICKLE):
+        with open(TOKEN_PICKLE, "rb") as token:
+            creds = pickle.load(token)
+
+    # ✅ Refresh token automatically if expired
+    if creds and creds.expired and creds.refresh_token:
+        try:
+            creds.refresh(Request())
+            with open(TOKEN_PICKLE, "wb") as token:
+                pickle.dump(creds, token)
+            print("🔄 Token refreshed successfully!")
+            return creds
+        except Exception as e:
+            print(f"❌ Token refresh failed: {e}")
+            return None
+
+    if not creds or not creds.valid:
+        raise Exception("❌ No valid credentials! Run the manual authentication script first.")
 
     return creds
 
