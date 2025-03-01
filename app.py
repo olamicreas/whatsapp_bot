@@ -313,21 +313,21 @@ def whatsapp_webhook():
     data = request.get_json()
     print("📩 Incoming Webhook Data:", json.dumps(data, indent=2))  # Debugging
 
-    TERMS_AND_CONDITIONS = """⚠️ *REFERRAL FRAUD WILL LEAD TO DISQUALIFICATION!* ⚠️
+    TERMS_AND_CONDITIONS = """ *REFERRAL FRAUD WILL LEAD TO DISQUALIFICATION:*
 
-We are closely monitoring the referral program, and any attempts to cheat the system will not be tolerated.
+⚠️ We are closely monitoring the referral program, and any attempts to cheat the system will not be tolerated.
 
-🔴 If your referrals delete *Mr. Heep’s* contact after verification, *your earnings will be canceled*.
+⚠️ If your referrals delete *Mr. Heep’s* contact after verification, *your earnings will be canceled*.
 
-🔴 If we detect fake or inactive referrals, *you will be permanently banned* from future programs without payment.
+⚠️ If we detect fake or inactive referrals, *you will be permanently banned* from future programs without payment.
 
-💰 *Final payment will be made between 24-48 hours after your referral count is verified.*
+⚠️ Final payment will be made between *24-48 hours* after your referral count is verified.
 
-We have strict verification methods in place, and once you are flagged for fraud, *there will be no second chance*.
+⚠️ We have strict verification methods in place, and once you are flagged for fraud, *there will be no second chance*.
 
 ✅ *Play fair, stay honest, and keep earning!*
 
-— *Mr. Heep’s Team*
+— *Mr. Heep’s Team* 💙
 """
 
     for entry in data.get("entry", []):
