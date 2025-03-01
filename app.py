@@ -85,7 +85,7 @@ def get_refresh_token():
     print("✅ Refresh token saved! Now your script can run without manual login.")
 
 # Uncomment this line **ONLY ONCE** to manually get a refresh token:
-get_refresh_token()
+#get_refresh_token()
 
 
 # Function to send WhatsApp message via Meta API
