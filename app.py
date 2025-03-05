@@ -50,42 +50,20 @@ app = Flask(__name__)
 
 def authenticate():
     creds = None
-
-    # ✅ Load saved credentials if they exist
     if os.path.exists("token.pickle"):
         with open("token.pickle", "rb") as token:
             creds = pickle.load(token)
-
-    # ✅ Refresh token automatically if expired
-    if creds and creds.expired and creds.refresh_token:
-        try:
-            creds.refresh(Request())
-            with open("token.pickle", "wb") as token:
-                pickle.dump(creds, token)
-            print("🔄 Token refreshed successfully!")
-            return creds
-        except Exception as e:
-            print(f"❌ Token refresh failed: {e}")
-            return None
-
+    
     if not creds or not creds.valid:
-        raise Exception("❌ No valid credentials! Run `get_refresh_token()` manually first.")
+        flow = InstalledAppFlow.from_client_secrets_file(
+            "client_secret_258863544208-vu84m7tuf9j99s10his372sobabqebjs.apps.googleusercontent.com.json", PEOPLE_API_SCOPES, redirect_uri=REDIRECT_URI
+        )
+        #creds = flow.run_local_server(port=8080)  # Ensure the port matches the redirect URI
+
+        with open("token.pickle", "wb") as token:
+            pickle.dump(creds, token)
 
     return creds
-
-# 🔹 Run this script ONCE manually to get a refresh token:
-def get_refresh_token():
-    flow = InstalledAppFlow.from_client_secrets_file("client_secret_258863544208-vu84m7tuf9j99s10his372sobabqebjs.apps.googleusercontent.com.json", SCOPES)
-    creds = flow.run_local_server(port=8080)
-
-
-    with open("token.pickle", "wb") as token:
-        pickle.dump(creds, token)
-
-    print("✅ Refresh token saved! Now your script can run without manual login.")
-
-# Uncomment this line **ONLY ONCE** to manually get a refresh token:
-#get_refresh_token()
 
 # Function to send WhatsApp message via Meta API
 def send_whatsapp_message(to, message):
