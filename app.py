@@ -280,6 +280,22 @@ def update_user_saved_status(phone, verified=False):
             sheet.update_cell(i, 6, status)  # Column 6 is "User saved?"
             return True
     return False
+
+def has_active_referral_period(phone):
+    users = sheet.get_all_records()
+    
+    for user in users:
+        if str(user.get("Phone", "")).strip() == phone:
+            start_time = user.get("Start Time", "")
+            if start_time:
+                start_time = datetime.fromisoformat(start_time)
+                if datetime.utcnow() < start_time + timedelta(days=7):
+                    return True  # User is still within the 7-day period
+            break  # Exit loop once the user is found
+    return False  # No active package found
+
+
+
 @app.route("/webhook", methods=["POST", "GET"])
 def whatsapp_webhook():
     if request.method == 'GET':
