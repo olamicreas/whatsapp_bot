@@ -147,7 +147,7 @@ def save_to_google_sheets(phone, name, referral_code=None, referrer_phone=None, 
 
     # Append new user row
     new_user_data = [phone, name, referral_code, 0, "Pending", "Pending", today_date, 
-                     referrer_phone or "", referral_limit, start_time]
+                     referrer_phone or "", referral_limit or "", start_time or ""]
     
     sheet.append_row(new_user_data)
 
