@@ -280,11 +280,9 @@ def update_user_saved_status(phone, verified=False):
             sheet.update_cell(i, 6, status)  # Column 6 is "User saved?"
             return True
     return False
-
 @app.route("/webhook", methods=["POST", "GET"])
 def whatsapp_webhook():
     if request.method == 'GET':
-        # WhatsApp Meta sends a GET request for verification
         token = request.args.get('hub.verify_token')
         challenge = request.args.get('hub.challenge')
         if token and challenge:
@@ -324,9 +322,8 @@ def whatsapp_webhook():
             if message_data:
                 message = message_data[0]
                 sender_phone = message["from"]
-                message_type = message["type"]  # Ensure we check the message type
+                message_type = message["type"]
                 
-                # Extract sender name from contacts
                 sender_name = contacts[0]["profile"]["name"] if contacts else "Unknown"
                 print(f"📞 Sender Phone: {sender_phone}, 👤 Sender Name: {sender_name}, 📝 Message Type: {message_type}")
 
@@ -334,30 +331,38 @@ def whatsapp_webhook():
                     message_text = message["text"]["body"].strip().lower()
 
                     if message_text == "start":
-                        # Ask user to pick a package
-                        send_whatsapp_message(
-                            sender_phone, 
-                            "📌 *Choose a Referral Package:*\n\n"
-                            "1️⃣ Type *100* for *100 referrals in 7 days.*\n"
-                            "2️⃣ Type *500* for *500 referrals in 7 days.*\n\n"
-                            "⚠️ You *won’t be paid* if your referrals exceed 7 days!"
-                        )
+                        if has_active_referral_period(sender_phone):
+                            referral_code = get_existing_referral_code(sender_phone)
+                            send_whatsapp_message(sender_phone, f"✅ You already have an active referral program!\n\n"
+                                                                 f"Your referral code is: {referral_code}\n"
+                                                                 f"🔗 Share this link: {generate_whatsapp_link(referral_code, sender_name)}\n\n"
+                                                                 "⚠️ You can select a new package *only after your current one expires!*")
+                        else:
+                            send_whatsapp_message(
+                                sender_phone, 
+                                "📌 *Choose a Referral Package:*\n\n"
+                                "1️⃣ Type *100* for *100 referrals in 7 days.*\n"
+                                "2️⃣ Type *500* for *500 referrals in 7 days.*\n\n"
+                                "⚠️ You *won’t be paid* if your referrals exceed 7 days!"
+                            )
 
                     elif message_text in ["100", "500"]:
-                        referral_limit = int(message_text)  # Store package choice
-                        start_time = datetime.utcnow().isoformat()  # Start 7-day countdown
+                        if has_active_referral_period(sender_phone):
+                            send_whatsapp_message(sender_phone, "⚠️ You have already selected a package. Wait for 7 days to choose again.")
+                        else:
+                            referral_limit = int(message_text)
+                            start_time = datetime.utcnow().isoformat()
 
-                        referral_code = save_to_google_sheets(sender_phone, sender_name, 
-                                                              referral_limit=referral_limit, start_time=start_time)
+                            referral_code = save_to_google_sheets(sender_phone, sender_name, 
+                                                                  referral_limit=referral_limit, start_time=start_time)
 
-                        send_whatsapp_message(sender_phone, f"✅ Your referral code is: {referral_code}")
-                        send_whatsapp_message(sender_phone, f"🔗 Share this link: {generate_whatsapp_link(referral_code, sender_name)}")
-
-                        send_whatsapp_message(
-                            sender_phone,
-                            f"⏳ *Your {referral_limit}-referral program has started!* You have *7 days* to complete it.\n"
-                            "⚠️ If your referrals exceed 7 days, *you won’t be paid!*"
-                        )
+                            send_whatsapp_message(sender_phone, f"✅ Your referral code is: {referral_code}")
+                            send_whatsapp_message(sender_phone, f"🔗 Share this link: {generate_whatsapp_link(referral_code, sender_name)}")
+                            send_whatsapp_message(
+                                sender_phone,
+                                f"⏳ *Your {referral_limit}-referral program has started!* You have *7 days* to complete it.\n"
+                                "⚠️ If your referrals exceed 7 days, *you won’t be paid!*"
+                            )
                     elif message_text == "verify":
                         send_whatsapp_message(sender_phone, "📩 Please send Mr. Heep’s contact as a vCard to verify.\n\nFollow these steps to send a contact card:\n1️⃣ Tap the + (iPhone) or 📎 (Android) icon.\n2️⃣ Select 'Contact'.\n3️⃣ Choose 'Mr. Heep' and send.\n\n✅ Done! We will verify it shortly.")
 
