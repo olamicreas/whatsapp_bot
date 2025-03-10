@@ -327,10 +327,30 @@ def whatsapp_webhook():
                     message_text = message["text"]["body"].strip().lower()
 
                     if message_text == "start":
-                        referral_code = save_to_google_sheets(sender_phone, sender_name)
+                        # Ask user to pick a package
+                        send_whatsapp_message(
+                            sender_phone, 
+                            "📌 *Choose a Referral Package:*\n\n"
+                            "1️⃣ Type *100* for *100 referrals in 7 days.*\n"
+                            "2️⃣ Type *500* for *500 referrals in 7 days.*\n\n"
+                            "⚠️ You *won’t be paid* if your referrals exceed 7 days!"
+                        )
+
+                    elif message_text in ["100", "500"]:
+                        referral_limit = int(message_text)  # Store package choice
+                        start_time = datetime.utcnow().isoformat()  # Start 7-day countdown
+
+                        referral_code = save_to_google_sheets(sender_phone, sender_name, 
+                                                              referral_limit=referral_limit, start_time=start_time)
+
                         send_whatsapp_message(sender_phone, f"✅ Your referral code is: {referral_code}")
                         send_whatsapp_message(sender_phone, f"🔗 Share this link: {generate_whatsapp_link(referral_code, sender_name)}")
 
+                        send_whatsapp_message(
+                            sender_phone,
+                            f"⏳ *Your {referral_limit}-referral program has started!* You have *7 days* to complete it.\n"
+                            "⚠️ If your referrals exceed 7 days, *you won’t be paid!*"
+                        )
                     elif message_text == "verify":
                         send_whatsapp_message(sender_phone, "📩 Please send Mr. Heep’s contact as a vCard to verify.\n\nFollow these steps to send a contact card:\n1️⃣ Tap the + (iPhone) or 📎 (Android) icon.\n2️⃣ Select 'Contact'.\n3️⃣ Choose 'Mr. Heep' and send.\n\n✅ Done! We will verify it shortly.")
 
