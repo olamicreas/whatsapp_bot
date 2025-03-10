@@ -154,7 +154,9 @@ def save_to_google_sheets(phone, name, referral_code=None, referrer_phone=None, 
     return referral_code
 
 
-
+def google_normalize_phone(phone):
+    """Ensure phone numbers are stripped of spaces and special characters."""
+    return phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
 
 
 def save_to_google_contacts(name, phone, referral_code=None):
@@ -162,21 +164,27 @@ def save_to_google_contacts(name, phone, referral_code=None):
         creds = authenticate()
         service = build("people", "v1", credentials=creds)
 
-        # Search for existing contact by phone number
+        normalized_phone = google_normalize_phone(phone)
+
+        # 🔍 Search for existing contact by phone number
         results = service.people().searchContacts(
-            query=phone, readMask="names,phoneNumbers"
+            query=normalized_phone, readMask="names,phoneNumbers"
         ).execute()
 
-        # If a contact with the phone number already exists, do not create a new one
+        # ✅ If a contact with the phone number already exists, do not create a new one
         if results.get("results"):
-            print(f"ℹ️ Contact {phone} already exists. Skipping save.")
-            return results["results"][0]["person"]["resourceName"]  # Return existing contact ID
+            for result in results["results"]:
+                existing_contact = result["person"]
+                existing_numbers = existing_contact.get("phoneNumbers", [])
 
-        # Modify the name to include the referral code and "HIPTV"
-        if referral_code:
-            full_name = f"{name} {referral_code} HIPTV"
-        else:
-            full_name = f"{name} HIPTV"
+                # Normalize all existing numbers and check if the phone exists
+                existing_numbers = [normalize_phone(num["value"]) for num in existing_numbers]
+                if normalized_phone in existing_numbers:
+                    print(f"ℹ️ Contact {phone} already exists. Skipping save.")
+                    return existing_contact["resourceName"]  # Return existing contact ID
+
+        # 📝 Modify name with referral code and "HIPTV"
+        full_name = f"{name} {referral_code} HIPTV" if referral_code else f"{name} HIPTV"
 
         contact_data = {
             "names": [{"givenName": full_name}],
@@ -187,7 +195,7 @@ def save_to_google_contacts(name, phone, referral_code=None):
         print("✅ Contact created successfully:", contact)
 
         return contact.get("resourceName", None)  # Return the new contact ID
-    
+
     except Exception as e:
         print(f"⚠️ Error saving contact: {e}")
         return None
