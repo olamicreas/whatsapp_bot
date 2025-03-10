@@ -108,29 +108,36 @@ def generate_whatsapp_link(referral_code, name):
     return f"{base_url}?phone={MR_HEEP_PHONE}&text={encoded_message}"
 
 
-def save_to_google_sheets(phone, name, referral_code=None, referrer_phone=None):
+def save_to_google_sheets(phone, name, referral_code=None, referrer_phone=None, referral_limit=None, start_time=None):
     users = sheet.get_all_records()
     today_date = datetime.today().strftime("%Y-%m-%d")  # Get today's date
 
     # If sheet is empty, create headers in the correct order
     if not users:
-        headers = ["Phone", "Name", "Referral Code", "Referrals", "Heep Saved?", "User Saved?", "Date Joined", "Referred By"]
+        headers = ["Phone", "Name", "Referral Code", "Referrals", "Heep Saved?", "User Saved?", 
+                   "Date Joined", "Referred By", "Referral Limit", "Start Time"]
         sheet.clear()
         sheet.append_row(headers)
 
     # Check if the user already exists
     for user in users:
         if str(user.get("Phone", "")).strip() == phone:
-            return user["Referral code"]  # Return existing referral code (Don't overwrite)
+            return user["Referral Code"]  # Return existing referral code (Don't overwrite)
 
     # If referral_code is None, the user wasn't referred, so generate a new referral code
     if not referral_code:
         referral_code = generate_referral_code()
 
+    # Ensure referral_limit and start_time are set
+    if referral_limit is None or start_time is None:
+        return "Error: Referral limit and start time must be provided."
+
     # Append new user row with the referrer’s phone number (correct column order)
-    sheet.append_row([phone, name, referral_code, 0, "Pending", "Pending", today_date, referrer_phone or ""])
+    sheet.append_row([phone, name, referral_code, 0, "Pending", "Pending", today_date, 
+                      referrer_phone or "", referral_limit, start_time])
 
     return referral_code  # Return the correct referral code
+
 
 
 
@@ -424,7 +431,7 @@ def autoresponder():
         print(f"🔎 Extracted referrer phone: {referrer_phone}")  # Debugging
 
         # 🚀 **Generate a new unique referral code for this user**
-        referral_code = generate_referral_code()
+        referral_code = referral_code_from_msg
 
         # ✅ Save referred contact to Google Sheets
         contact_saved = save_to_google_contacts(sender_name, sender_phone, referral_code)
@@ -683,16 +690,31 @@ def leaderboard():
         if not users:
             return render_template("leaderboard.html", users=[])
 
-        # Sort users by referral count in descending order
-        sorted_users = sorted(users, key=lambda x: int(x.get("Referrals", 0)), reverse=True)
+        current_time = datetime.utcnow()
 
-        # Assign rank to each user
+        # Filter users whose referral period has NOT expired
+        active_users = []
+        for user in users:
+            start_time_str = user.get("Start Time", "")
+            referral_limit = int(user.get("Referral Limit", 0))
+
+            if start_time_str:
+                start_time = datetime.fromisoformat(start_time_str)
+                if (current_time - start_time).days <= 7:  # Check if within 7 days
+                    active_users.append(user)
+
+        # Sort active users by referral count
+        sorted_users = sorted(active_users, key=lambda x: int(x.get("Referrals", 0)), reverse=True)
+
+        # Assign ranks
         for index, user in enumerate(sorted_users, start=1):
             user["rank"] = index
 
         return render_template("leaderboard.html", users=sorted_users)
+    
     except Exception as e:
         return render_template("leaderboard.html", users=[], error=str(e))
+
 
 if __name__ == "__main__":
     app.run(debug=True)
