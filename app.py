@@ -108,36 +108,41 @@ def generate_whatsapp_link(referral_code, name):
     return f"{base_url}?phone={MR_HEEP_PHONE}&text={encoded_message}"
 
 
+
 def save_to_google_sheets(phone, name, referral_code=None, referrer_phone=None, referral_limit=None, start_time=None):
     users = sheet.get_all_records()
     today_date = datetime.today().strftime("%Y-%m-%d")  # Get today's date
 
-    # If sheet is empty, create headers in the correct order
+    # If sheet is empty, create headers
     if not users:
         headers = ["Phone", "Name", "Referral Code", "Referrals", "Heep Saved?", "User Saved?", 
                    "Date Joined", "Referred By", "Referral Limit", "Start Time"]
         sheet.clear()
         sheet.append_row(headers)
 
-    # Check if the user already exists
-    for user in users:
-        if str(user.get("Phone", "")).strip() == phone:
-            return user["Referral Code"]  # Return existing referral code (Don't overwrite)
+    # Ensure required fields are provided
+    if referral_limit is None or start_time is None:
+        raise ValueError("Referral limit and start time must be provided.")
 
-    # If referral_code is None, the user wasn't referred, so generate a new referral code
+    # Normalize phone numbers to string
+    phone = str(phone).strip()
+
+    # Check if the user already exists
+    existing_referral_code = next((user["Referral Code"] for user in users if str(user.get("Phone", "")).strip() == phone), None)
+    if existing_referral_code:
+        return existing_referral_code  # Return existing referral code
+
+    # Generate referral code if not provided
     if not referral_code:
         referral_code = generate_referral_code()
 
-    # Ensure referral_limit and start_time are set
-    if referral_limit is None or start_time is None:
-        return "Error: Referral limit and start time must be provided."
+    # Append new user row
+    new_user_data = [phone, name, referral_code, 0, "Pending", "Pending", today_date, 
+                     referrer_phone or "", referral_limit, start_time]
+    
+    sheet.append_row(new_user_data)
 
-    # Append new user row with the referrer’s phone number (correct column order)
-    sheet.append_row([phone, name, referral_code, 0, "Pending", "Pending", today_date, 
-                      referrer_phone or "", referral_limit, start_time])
-
-    return referral_code  # Return the correct referral code
-
+    return referral_code
 
 
 
