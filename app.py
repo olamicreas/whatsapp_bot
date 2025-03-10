@@ -153,6 +153,11 @@ def save_to_google_sheets(phone, name, referral_code=None, referrer_phone=None, 
 
     return referral_code
 
+def g_normalize_phone(phone):
+    """Ensure phone numbers are stripped of spaces and special characters."""
+    return phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+
+
 
 def contact_exists(service, phone):
     """Check if a contact with the given phone number exists."""
@@ -162,7 +167,7 @@ def contact_exists(service, phone):
 
     for person in people.get("connections", []):
         for number in person.get("phoneNumbers", []):
-            if normalize_phone(number["value"]) == normalize_phone(phone):
+            if g_normalize_phone(number["value"]) == g_normalize_phone(phone):
                 print(f"ℹ️ Contact {phone} already exists. Skipping save.")
                 return True
     return False
