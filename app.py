@@ -53,27 +53,25 @@ app = Flask(__name__)
 def authenticate():
     creds = None
 
-    # ✅ Load existing token if available
+    # ✅ Load token.pickle from Render
     if os.path.exists(TOKEN_PICKLE):
         with open(TOKEN_PICKLE, "rb") as token:
             creds = pickle.load(token)
 
     # ✅ Refresh token if expired
     if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())  
-    elif not creds or not creds.valid:
-        # ✅ Start OAuth flow if no valid credentials
-        flow = InstalledAppFlow.from_client_secrets_file(
-            CREDENTIALS_FILE, PEOPLE_API_SCOPES
-        )
-        #creds = flow.run_local_server(port=8080) # Redirects to localhost
+        try:
+            creds.refresh(Request())  
+            with open(TOKEN_PICKLE, "wb") as token:
+                pickle.dump(creds, token)  # ✅ Save refreshed token
+        except Exception as e:
+            print(f"⚠️ Token refresh failed: {e}")
+            creds = None  # Force re-authentication
 
-        # ✅ Save new credentials
-        with open(TOKEN_PICKLE, "wb") as token:
-            pickle.dump(creds, token)
+    if not creds or not creds.valid:
+        raise ValueError("❌ Token is missing or invalid! Upload a valid 'token.pickle'.")
 
     return creds
-
 # Function to send WhatsApp message via Meta API
 def send_whatsapp_message(to, message):
     headers = {
