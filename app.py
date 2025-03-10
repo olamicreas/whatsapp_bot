@@ -153,6 +153,16 @@ def save_to_google_contacts(name, phone, referral_code=None):
         creds = authenticate()
         service = build("people", "v1", credentials=creds)
 
+        # Search for existing contact by phone number
+        results = service.people().searchContacts(
+            query=phone, readMask="names,phoneNumbers"
+        ).execute()
+
+        # If a contact with the phone number already exists, do not create a new one
+        if results.get("results"):
+            print(f"ℹ️ Contact {phone} already exists. Skipping save.")
+            return results["results"][0]["person"]["resourceName"]  # Return existing contact ID
+
         # Modify the name to include the referral code and "HIPTV"
         if referral_code:
             full_name = f"{name} {referral_code} HIPTV"
@@ -167,8 +177,7 @@ def save_to_google_contacts(name, phone, referral_code=None):
         contact = service.people().createContact(body=contact_data).execute()
         print("✅ Contact created successfully:", contact)
 
-        # Return the contact's resource name (ID) instead of None
-        return contact.get("resourceName", None)
+        return contact.get("resourceName", None)  # Return the new contact ID
     
     except Exception as e:
         print(f"⚠️ Error saving contact: {e}")
