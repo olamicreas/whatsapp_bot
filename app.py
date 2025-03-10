@@ -66,7 +66,7 @@ def authenticate():
         flow = InstalledAppFlow.from_client_secrets_file(
             CREDENTIALS_FILE, PEOPLE_API_SCOPES
         )
-        creds = flow.run_console() # Redirects to localhost
+        creds = flow.run_local_server(port=8080) # Redirects to localhost
 
         # ✅ Save new credentials
         with open(TOKEN_PICKLE, "wb") as token:
