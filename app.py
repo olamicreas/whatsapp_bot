@@ -507,7 +507,8 @@ def autoresponder():
                 "replies": [{"message": "❌ Contact could not be saved. Please try again."}]
             }), 400
 
-        save_to_google_sheets(sender_phone, sender_name, referral_code_from_msg, referrer_phone, None, None)
+        save_to_google_sheets(sender_phone, sender_name, referral_code_from_msg, referrer_phone, "", "")
+
 
 
         # ✅ Mark referred user as "Verified"
