@@ -348,7 +348,7 @@ def whatsapp_webhook():
 
                     if message_text == "start":
                         if has_active_referral_period(sender_phone):
-                            referral_code = get_existing_referral_code(sender_phone)
+                            referral_code = has_active_referral_period(phone)
                             send_whatsapp_message(sender_phone, f"✅ You already have an active referral program!\n\n"
                                                                  f"Your referral code is: {referral_code}\n"
                                                                  f"🔗 Share this link: {generate_whatsapp_link(referral_code, sender_name)}\n\n"
