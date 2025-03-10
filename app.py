@@ -39,7 +39,9 @@ sheet = client_gs.open("WhatsApp Referral Bot").sheet1
 
 # ✅ Fix Google People API (for Google Contacts)
 PEOPLE_API_SCOPES = ["https://www.googleapis.com/auth/contacts"]
-REDIRECT_URI = "https://referral-contest.onrender.com/"
+REDIRECT_URI = "http://localhost:8080/"
+CREDENTIALS_FILE = "client_secret_258863544208-vu84m7tuf9j99s10his372sobabqebjs.apps.googleusercontent.com.json"
+TOKEN_PICKLE = "token.pickle"
 
 # ✅ Mr. Heep's phone number
 MR_HEEP_PHONE = "2347010528330"
@@ -50,17 +52,24 @@ app = Flask(__name__)
 
 def authenticate():
     creds = None
-    if os.path.exists("token.pickle"):
-        with open("token.pickle", "rb") as token:
-            creds = pickle.load(token)
-    
-    if not creds or not creds.valid:
-        flow = InstalledAppFlow.from_client_secrets_file(
-            "client_secret_258863544208-vu84m7tuf9j99s10his372sobabqebjs.apps.googleusercontent.com.json", PEOPLE_API_SCOPES, redirect_uri=REDIRECT_URI
-        )
-        #creds = flow.run_local_server(port=8080)  # Ensure the port matches the redirect URI
 
-        with open("token.pickle", "wb") as token:
+    # ✅ Load existing token if available
+    if os.path.exists(TOKEN_PICKLE):
+        with open(TOKEN_PICKLE, "rb") as token:
+            creds = pickle.load(token)
+
+    # ✅ Refresh token if expired
+    if creds and creds.expired and creds.refresh_token:
+        creds.refresh(Request())  
+    elif not creds or not creds.valid:
+        # ✅ Start OAuth flow if no valid credentials
+        flow = InstalledAppFlow.from_client_secrets_file(
+            CREDENTIALS_FILE, PEOPLE_API_SCOPES
+        )
+        creds = flow.run_local_server(port=8080)  # Redirects to localhost
+
+        # ✅ Save new credentials
+        with open(TOKEN_PICKLE, "wb") as token:
             pickle.dump(creds, token)
 
     return creds
