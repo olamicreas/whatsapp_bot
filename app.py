@@ -490,55 +490,47 @@ def autoresponder():
         referral_code_from_msg = extract_referral_code(message_content)
 
         # 🛠 **Find the referrer using the extracted referral code**
-        users = sheet.get_all_records()
-        referrer = next((u for u in users if str(u.get("Referral code", "")).strip() == referral_code_from_msg), None)
-        referrer_phone = str(referrer.get("Phone", "")) if referrer else None
+        referrer_phone = None
+        if referral_code_from_msg:
+            users = sheet.get_all_records()
+            referrer = next((u for u in users if str(u.get("Referral code", "")).strip() == referral_code_from_msg), None)
+            referrer_phone = str(referrer.get("Phone", "")) if referrer else None
 
         print(f"🔎 Extracted referrer phone: {referrer_phone}")  # Debugging
 
-        # 🚀 **Generate a new unique referral code for this user**
-        referral_code = referral_code_from_msg
-
         # ✅ Save referred contact to Google Sheets
-        contact_saved = save_to_google_contacts(sender_name, sender_phone, referral_code)
-        if contact_saved:
-            save_to_google_sheets(sender_phone, sender_name, referral_code, referrer_phone)
+        contact_saved = save_to_google_contacts(sender_name, sender_phone, referral_code_from_msg)
+        if not contact_saved:
+            return jsonify({
+                "status": "error",
+                "message": "Contact could not be saved.",
+                "replies": [{"message": "❌ Contact could not be saved. Please try again."}]
+            }), 400
 
-            # ✅ Mark referred user as "Verified"
-            update_user_saved_status(sender_phone, verified=True)
+        save_to_google_sheets(sender_phone, sender_name, referral_code_from_msg, referrer_phone)
 
-            # ✅ Mark referrer as "Verified" if they exist
-            if referrer_phone:
-                print(f"✅ Updating referrer {referrer_phone} to Verified")  # Debugging
-                updated = update_user_saved_status(referrer_phone, verified=True)
-                if updated:
-                    print(f"✅ Successfully verified referrer {referrer_phone}")
-                else:
-                    print(f"⚠️ Failed to verify referrer {referrer_phone}")
+        # ✅ Mark referred user as "Verified"
+        update_user_saved_status(sender_phone, verified=True)
 
-            update_heep_saved_status(sender_phone)
+        # ✅ Mark referrer as "Verified" if they exist
+        if referrer_phone:
+            print(f"✅ Updating referrer {referrer_phone} to Verified")  # Debugging
+            update_user_saved_status(referrer_phone, verified=True)
 
-            # ✅ Check if Mr. Heep is saved by the referred user
-            heep_saved_by_user = verify_heep_contact(vcard_contact)
+        update_heep_saved_status(sender_phone)
 
-            if heep_saved_by_user:
-                if handle_referral_usage(referral_code_from_msg, sender_phone, sender_name):
-                    response_message = "Welcome😊!\n\nThank you for joining our community.\n\n• Your contact has been successfully saved.\n\n• To stay updated with our daily news and engaging content, please save our contact as “MR HEEP”.\n\n• Click the link below to verify that you have saved our contact:\n\n👉 [Click here to verify](https://wa.me/2348066850927?text=verify)"
+        # ✅ Check if Mr. Heep is saved by the referred user
+        heep_saved_by_user = verify_heep_contact(vcard_contact)
 
-
-
-                else:
-                    response_message = "Welcome😊!\n\nThank you for joining our community.\n\n• Your contact has been successfully saved.\n\n• To stay updated with our daily news and engaging content, please save our contact as “MR HEEP”.\n\n• Click the link below to verify that you have saved our contact:\n\n👉 [Click here to verify](https://wa.me/2348066850927?text=verify)"
-
-                    
-
-            else:
-                response_message = "Welcome😊!\n\nThank you for joining our community.\n\n• Your contact has been successfully saved.\n\n• To stay updated with our daily news and engaging content, please save our contact as “MR HEEP”.\n\n• Click the link below to verify that you have saved our contact:\n\n👉 [Click here to verify](https://wa.me/2348066850927?text=verify)"
-
-                
-
-        else:
-            response_message = "❌ Contact could not be saved. Please try again."
+        # 🔥 Unified Response Message
+        response_message = (
+            "Welcome😊!\n\n"
+            "Thank you for joining our community.\n\n"
+            "• Your contact has been successfully saved.\n\n"
+            "• To stay updated with our daily news and engaging content, please save our contact as “MR HEEP”.\n\n"
+            "• Click the link below to verify that you have saved our contact:\n\n"
+            "👉 [Click here to verify](https://wa.me/2348066850927?text=verify)"
+        )
 
         return jsonify({
             "status": "success",
@@ -553,6 +545,7 @@ def autoresponder():
             "message": str(e),
             "replies": [{"message": "⚠️ An error occurred while processing your request."}]
         }), 500
+
 
 
 
