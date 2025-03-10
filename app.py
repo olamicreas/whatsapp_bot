@@ -154,34 +154,26 @@ def save_to_google_sheets(phone, name, referral_code=None, referrer_phone=None, 
     return referral_code
 
 
-def google_normalize_phone(phone):
-    """Ensure phone numbers are stripped of spaces and special characters."""
-    return phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+def contact_exists(service, phone):
+    """Check if a contact with the given phone number exists."""
+    people = service.people().connections().list(
+        resourceName="people/me", personFields="names,phoneNumbers"
+    ).execute()
 
+    for person in people.get("connections", []):
+        for number in person.get("phoneNumbers", []):
+            if normalize_phone(number["value"]) == normalize_phone(phone):
+                print(f"ℹ️ Contact {phone} already exists. Skipping save.")
+                return True
+    return False
 
 def save_to_google_contacts(name, phone, referral_code=None):
     try:
         creds = authenticate()
         service = build("people", "v1", credentials=creds)
 
-        normalized_phone = google_normalize_phone(phone)
-
-        # 🔍 Search for existing contact by phone number
-        results = service.people().searchContacts(
-            query=normalized_phone, readMask="names,phoneNumbers"
-        ).execute()
-
-        # ✅ If a contact with the phone number already exists, do not create a new one
-        if results.get("results"):
-            for result in results["results"]:
-                existing_contact = result["person"]
-                existing_numbers = existing_contact.get("phoneNumbers", [])
-
-                # Normalize all existing numbers and check if the phone exists
-                existing_numbers = [normalize_phone(num["value"]) for num in existing_numbers]
-                if normalized_phone in existing_numbers:
-                    print(f"ℹ️ Contact {phone} already exists. Skipping save.")
-                    return existing_contact["resourceName"]  # Return existing contact ID
+        if contact_exists(service, phone):
+            return None  # Contact already exists, skip
 
         # 📝 Modify name with referral code and "HIPTV"
         full_name = f"{name} {referral_code} HIPTV" if referral_code else f"{name} HIPTV"
@@ -199,7 +191,6 @@ def save_to_google_contacts(name, phone, referral_code=None):
     except Exception as e:
         print(f"⚠️ Error saving contact: {e}")
         return None
-
 
 
 def update_heep_saved_status(phone):
