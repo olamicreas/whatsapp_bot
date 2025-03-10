@@ -506,7 +506,7 @@ def autoresponder():
             return jsonify({
                 "status": "error",
                 "message": "Contact could not be saved.",
-                "replies": [{"message": "❌ Contact could not be saved. Please try again."}]
+                "replies": [{"message": "❌ Contact could not be saved. Your contact has been saved already"}]
             }), 400
 
         save_to_google_sheets(sender_phone, sender_name, referral_code_from_msg, referrer_phone, "", "")
