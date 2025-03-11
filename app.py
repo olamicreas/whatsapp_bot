@@ -406,7 +406,7 @@ def whatsapp_webhook():
                                 "⏳ *Your {referral_limit}-referral program has started!* You have *7 days* to complete it.\n"
                                 "⚠️ If your referrals exceed 7 days, *you won’t be paid!*"
                             )
-                            )
+                            
                     
                     elif message_text in ["100", "500"]:
                         existing_referral_code = get_existing_referral_code(sender_phone)
