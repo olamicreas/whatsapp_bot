@@ -403,7 +403,7 @@ def whatsapp_webhook():
                                 "📌 *Choose a Referral Package:*\n\n"
                                 "1️⃣ Type *100* for *100 referrals in 7 days.*\n"
                                 "2️⃣ Type *500* for *500 referrals in 7 days.*\n\n"
-                                "⏳ *Your {referral_limit}-referral program has started!* You have *7 days* to complete it.\n"
+                                "⏳ *Your referral program starts once a referral package is chosen!* You have *7 days* to complete it.\n"
                                 "⚠️ If your referrals exceed 7 days, *you won’t be paid!*"
                             )
                             
