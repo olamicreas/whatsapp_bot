@@ -6,6 +6,8 @@ import os
 import urllib.parse
 import re
 from google.oauth2 import service_account
+from google.auth.transport.requests import Request
+
 from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
 from dotenv import load_dotenv
@@ -53,7 +55,6 @@ app = Flask(__name__)
 def authenticate():
     creds = None
 
-    # ✅ Load token.pickle from Render
     if os.path.exists(TOKEN_PICKLE):
         with open(TOKEN_PICKLE, "rb") as token:
             creds = pickle.load(token)
@@ -66,12 +67,14 @@ def authenticate():
                 pickle.dump(creds, token)  # ✅ Save refreshed token
         except Exception as e:
             print(f"⚠️ Token refresh failed: {e}")
-            creds = None  # Force re-authentication
+            raise ValueError("❌ Upload a new 'token.pickle' with a valid refresh token.")
 
     if not creds or not creds.valid:
         raise ValueError("❌ Token is missing or invalid! Upload a valid 'token.pickle'.")
 
     return creds
+
+
 # Function to send WhatsApp message via Meta API
 def send_whatsapp_message(to, message):
     headers = {
