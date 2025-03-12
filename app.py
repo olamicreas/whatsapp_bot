@@ -400,10 +400,10 @@ def whatsapp_webhook():
                         else:
                             send_whatsapp_message(
                                 sender_phone, 
-                                " *Referral Package Selection:*\n\n"
+                                "*Referral Package Selection:*\n\n"
                                 "1. Enter *100* for *100 referrals in 7 days.*\n"
                                 "2. Enter *500* for *500 referrals in 7 days.*\n\n"
-                                " *Once you choose a referral package, your referral program will begin immediately. You have 7 days to complete it.*\n\n"
+                                "*Once you choose a referral package, your referral program will begin immediately. You have 7 days to complete it.*\n\n"
                                 "Important: Referrals completed beyond the 7-day period will not be eligible for payment.*"
                             )
                             
