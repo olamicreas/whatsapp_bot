@@ -138,7 +138,7 @@ def save_to_google_sheets(phone, name, referral_code=None, referrer_phone=None, 
     phone = str(phone).strip()
 
     # Check if the user already exists
-    existing_referral_code = next((user["Referral Code"] for user in users if str(user.get("Phone", "")).strip() == phone), None)
+    existing_referral_code = next((user["Referral code"] for user in users if str(user.get("Phone", "")).strip() == phone), None)
     if existing_referral_code:
         return existing_referral_code  # Return existing referral code
 
@@ -315,7 +315,7 @@ def has_active_referral_period(phone):
     for user in users:
         if str(user.get("Phone", "")).strip() == phone:
             start_time = user.get("Start Time", "")
-            referral_code = user.get("Referral Code", "")  # Fetch referral code
+            referral_code = user.get("Referral code", "")  # Fetch referral code
             
             if start_time:
                 start_time = datetime.fromisoformat(start_time)
@@ -330,7 +330,7 @@ def get_existing_referral_code(phone):
     for user in users:
         if str(user.get("Phone", "")).strip() == phone:
             start_time = user.get("Start Time", "")
-            referral_code = user.get("Referral Code", "")
+            referral_code = user.get("Referral code", "")
 
             if start_time:
                 start_time = datetime.fromisoformat(start_time)
