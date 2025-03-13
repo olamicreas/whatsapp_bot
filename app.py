@@ -125,7 +125,7 @@ def save_to_google_sheets(phone, name, referral_code=None, referrer_phone=None, 
 
     # If sheet is empty, create headers
     if not users:
-        headers = ["Phone", "Name", "Referral Code", "Referrals", "Heep Saved?", "User Saved?", 
+        headers = ["Phone", "Name", "Referral code", "Referrals", "Heep Saved?", "User Saved?", 
                    "Date Joined", "Referred By", "Referral Limit", "Start Time"]
         sheet.clear()
         sheet.append_row(headers)
