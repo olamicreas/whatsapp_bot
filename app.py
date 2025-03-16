@@ -407,6 +407,7 @@ def whatsapp_webhook():
                                 "1. Enter *100* for *100 referrals in 7 days.*\n"
                                 "2. Enter *500* for *500 referrals in 7 days.*\n\n"
                                 "*Once you choose a referral package, your referral program will begin immediately. You have 7 days to complete it.\n\n"
+                                "For transparency,  our Bot tracks and records all referrals on a dashboard, with a leaderboard displaying each contestant’s referrals in real time.\n\n"
                                 "Important: Referrals completed beyond the 7-day period will not be eligible for payment.*"
                             )
                             
