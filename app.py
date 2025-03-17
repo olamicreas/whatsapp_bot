@@ -453,9 +453,12 @@ def whatsapp_webhook():
                         send_whatsapp_message(sender_phone, "✅ Verification successful! Mr. Heep’s contact has been saved.")
                 
                         # Now update the referral count for the referrer using the "Referred By" information
+                        referral_code = get_existing_referral_code(sender_phone)
                         normalized_sender = normalize_phone_number(sender_phone)
                         if handle_referral_usage_by_referred(normalized_sender):
                             print("Referral count updated successfully.")
+                                message_to_heep = f"✅ {sender_name} just got referred by referral code *{referral_code}*."
+                                send_whatsapp_message(MR_HEEP_PHONE, message_to_heep)
                         else:
                             print("Referral count not updated.")
                         
