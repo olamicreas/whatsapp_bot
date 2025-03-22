@@ -223,7 +223,8 @@ def handle_referral_usage_by_referred(referred_phone):
         return False
 
     # Retrieve the referrer's phone number and normalize it
-    referrer_phone = normalize_phone_number(referred_user.get("Referred By", "").strip())
+    referrer_phone = normalize_phone_number(str(referred_user.get("Referred By", "")).strip())
+
     if not referrer_phone:
         print("⚠️ No referrer found for this user.")
         return False
