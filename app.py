@@ -353,7 +353,7 @@ def get_user_data(phone):
                 "phone": user.get("Phone", ""),
                 "name": user.get("Name", ""),
                 "referral_code": user.get("Referral code", ""),
-                "referral_limit": int(user.get("Referral limit", 0) or 0),  # Convert safely to int
+                "referral_limit": int(user.get("Referral Limit", 0) or 0),  # Convert safely to int
                 "referral_count": int(user.get("Referrals", 0) or 0),  # Convert safely to int
                 "start_time": user.get("Start Time", ""),
                 "heep_saved": user.get("Heep saved?", ""),
