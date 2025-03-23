@@ -624,16 +624,31 @@ def autoresponder():
 def dashboard():
     return render_template("dashboard.html")  # Ensure dashboard.html exists in templates folder
 
+
+
+
 @app.route("/get_users")
 def get_users():
     try:
         users = sheet.get_all_records()
         processed_users = []
+        current_time = datetime.utcnow()  # Get current UTC time
 
         print("🔍 Raw Users Data:", users)  # Debugging line to print all users
 
         for user in users:
             user_phone = str(user.get("Phone", "")).strip()
+            start_time_str = user.get("Start Time", "").strip()
+
+            # Skip users with an expired 7-day countdown
+            if start_time_str:
+                try:
+                    start_time = datetime.fromisoformat(start_time_str)
+                    if (current_time - start_time).days > 7:
+                        print(f"⏳ Skipping expired user: {user.get('Name', 'Unknown')} (Start Time: {start_time})")  # Debugging
+                        continue  # Skip user if their period has expired
+                except ValueError:
+                    print(f"⚠️ Invalid start time format for {user.get('Name', 'Unknown')}: {start_time_str}")  # Debugging
 
             # Convert referrals safely
             num_referrals = user.get("Referrals", 0)
