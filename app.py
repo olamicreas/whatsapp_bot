@@ -820,16 +820,15 @@ def leaderboard():
             return render_template("leaderboard.html", users=[])
 
         current_time = datetime.utcnow()
+        active_users = []  # This will only store users whose referral period is still active
 
-        # Filter users whose referral period has NOT expired
-        active_users = []
         for user in users:
             start_time_str = user.get("Start Time", "")
             referral_limit = int(user.get("Referral Limit", 0))
 
             if start_time_str:
                 start_time = datetime.fromisoformat(start_time_str)
-                if (current_time - start_time).days <= 7:  # Check if within 7 days
+                if (current_time - start_time).days <= 7:  # Only include users within 7-day period
                     active_users.append(user)
 
         # Sort active users by referral count
