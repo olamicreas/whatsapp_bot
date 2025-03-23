@@ -353,15 +353,14 @@ def get_user_data(phone):
                 "phone": user.get("Phone", ""),
                 "name": user.get("Name", ""),
                 "referral_code": user.get("Referral code", ""),
-                "referral_limit": user.get("Referral limit", ""),
-                "referral_count": user.get("Referrals", ""),
+                "referral_limit": int(user.get("Referral limit", 0) or 0),  # Convert safely to int
+                "referral_count": int(user.get("Referrals", 0) or 0),  # Convert safely to int
                 "start_time": user.get("Start Time", ""),
                 "heep_saved": user.get("Heep saved?", ""),
                 "user_saved": user.get("User saved?", ""),
             }
     
     return None  # Return None if the user is not found
-
 
 
 @app.route("/webhook", methods=["POST", "GET"])
