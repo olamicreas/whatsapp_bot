@@ -393,6 +393,40 @@ def whatsapp_webhook():
                 if message_type == "text":
                     message_text = message["text"]["body"].strip().lower()
 
+                    if message_text == "status":
+                        # Fetch user details from Google Sheets
+                        user_data = get_user_data(sender_phone)  # Function to fetch user details
+
+                        if not user_data:
+                            send_whatsapp_message(sender_phone, "⚠️ You have not started any referral program.")
+                            return jsonify({"status": "success"}), 200
+                        
+                        start_time = datetime.fromisoformat(user_data["start_time"])
+                        referral_limit = int(user_data["referral_limit"])
+                        referral_count = int(user_data["referral_count"])
+
+                        end_time = start_time + timedelta(days=7)
+                        days_left = (end_time - datetime.utcnow()).days
+
+                        if days_left > 0:
+                            send_whatsapp_message(sender_phone, f"📆 *Referral Status:*\n\n"
+                                                                f"🔹 *Days Left:* {days_left} days\n"
+                                                                f"🔹 *Your Target:* {referral_limit} referrals\n"
+                                                                f"🔹 *Current Referrals:* {referral_count}\n\n"
+                                                                "✅ Keep referring! Remember, only referrals within 7 days count.")
+                        else:
+                            # Check qualification
+                            if referral_count >= referral_limit:
+                                send_whatsapp_message(sender_phone, f"🎉 *Congratulations!* You have successfully completed your referral target.\n\n"
+                                                                    f"✅ *Your Target:* {referral_limit} referrals\n"
+                                                                    f"✅ *Your Final Count:* {referral_count}\n\n"
+                                                                    "🎯 You qualify for payment! Wait for verification within 24-48 hours.")
+                            else:
+                                send_whatsapp_message(sender_phone, f"⏳ *Referral Period Expired!*\n\n"
+                                                                    f"❌ You needed {referral_limit} referrals but got {referral_count}.\n"
+                                                                    "⚠️ You did not qualify for payment this time. Try again in the next program!")
+
+
                     if message_text == "start":
                         existing_referral_code = get_existing_referral_code(sender_phone)
                         
