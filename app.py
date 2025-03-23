@@ -344,6 +344,25 @@ def get_existing_referral_code(phone):
     return None  # No active referral found
 
 
+def get_user_data(phone):
+    users = sheet.get_all_records()
+
+    for user in users:
+        if str(user.get("Phone", "")).strip() == phone:
+            return {
+                "phone": user.get("Phone", ""),
+                "name": user.get("Name", ""),
+                "referral_code": user.get("Referral code", ""),
+                "referral_limit": user.get("Referral limit", "0"),
+                "referral_count": user.get("Referrals", "0"),
+                "start_time": user.get("Start Time", ""),
+                "heep_saved": user.get("Heep saved?", ""),
+                "user_saved": user.get("User saved?", ""),
+            }
+    
+    return None  # Return None if the user is not found
+
+
 
 @app.route("/webhook", methods=["POST", "GET"])
 def whatsapp_webhook():
