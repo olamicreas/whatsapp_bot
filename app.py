@@ -353,8 +353,8 @@ def get_user_data(phone):
                 "phone": user.get("Phone", ""),
                 "name": user.get("Name", ""),
                 "referral_code": user.get("Referral code", ""),
-                "referral_limit": int(user.get("Referral Limit", 0) or 0),  # Convert safely to int
-                "referral_count": int(user.get("Referrals", 0) or 0),  # Convert safely to int
+                "referral_limit": int(user.get("Referral Limit", "0") or 0),  # Convert safely to int
+                "referral_count": int(user.get("Referrals", "0") or 0),  # Convert safely to int
                 "start_time": user.get("Start Time", ""),
                 "heep_saved": user.get("Heep saved?", ""),
                 "user_saved": user.get("User saved?", ""),
@@ -827,8 +827,10 @@ def leaderboard():
 
             if start_time_str:
                 start_time = datetime.fromisoformat(start_time_str)
-                if (current_time - start_time).days <= 7:  # Only include users within 7-day period
+                end_time = start_time + timedelta(days=7)  # Calculate exact end time
+                if current_time < end_time:  # Check if still within the 7-day period
                     active_users.append(user)
+
 
         # Sort active users by referral count
         sorted_users = sorted(active_users, key=lambda x: int(x.get("Referrals", 0)), reverse=True)
