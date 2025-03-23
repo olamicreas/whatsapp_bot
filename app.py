@@ -336,7 +336,9 @@ def get_existing_referral_code(phone):
             if start_time:
                 start_time = datetime.fromisoformat(start_time)
                 if datetime.utcnow() < start_time + timedelta(days=7):
-                    return referral_code  # Return existing referral code if within active period
+                    return referral_code  # Return existing referral code if still active
+                else:
+                    return None  # Return None if the 7-day period is over
             break  # Stop once we find the user
             
     return None  # No active referral found
@@ -394,20 +396,25 @@ def whatsapp_webhook():
                     message_text = message["text"]["body"].strip().lower()
 
                     if message_text == "status":
-                        # Fetch user details from Google Sheets
-                        user_data = get_user_data(sender_phone)  # Function to fetch user details
-
+                        user_data = get_user_data(sender_phone)  # Fetch user details
+                    
                         if not user_data:
                             send_whatsapp_message(sender_phone, "⚠️ You have not started any referral program.")
                             return jsonify({"status": "success"}), 200
+                    
+                        start_time = user_data["start_time"]
                         
-                        start_time = datetime.fromisoformat(user_data["start_time"])
+                        if not start_time:
+                            send_whatsapp_message(sender_phone, "⚠️ No start time recorded for your referral program.")
+                            return jsonify({"status": "success"}), 200
+                    
+                        start_time = datetime.fromisoformat(start_time)
                         referral_limit = int(user_data["referral_limit"])
                         referral_count = int(user_data["referral_count"])
-
+                    
                         end_time = start_time + timedelta(days=7)
                         days_left = (end_time - datetime.utcnow()).days
-
+                    
                         if days_left > 0:
                             send_whatsapp_message(sender_phone, f"📆 *Referral Status:*\n\n"
                                                                 f"🔹 *Days Left:* {days_left} days\n"
@@ -415,7 +422,6 @@ def whatsapp_webhook():
                                                                 f"🔹 *Current Referrals:* {referral_count}\n\n"
                                                                 "✅ Keep referring! Remember, only referrals within 7 days count.")
                         else:
-                            # Check qualification
                             if referral_count >= referral_limit:
                                 send_whatsapp_message(sender_phone, f"🎉 *Congratulations!* You have successfully completed your referral target.\n\n"
                                                                     f"✅ *Your Target:* {referral_limit} referrals\n"
@@ -426,10 +432,10 @@ def whatsapp_webhook():
                                                                     f"❌ You needed {referral_limit} referrals but got {referral_count}.\n"
                                                                     "⚠️ You did not qualify for payment this time. Try again in the next program!")
 
-
+            
                     if message_text == "start":
                         existing_referral_code = get_existing_referral_code(sender_phone)
-                        
+                    
                         if existing_referral_code:
                             send_whatsapp_message(sender_phone, f"✅ You already have an active referral program!\n\n"
                                                                  f"Your referral code is: {existing_referral_code}\n"
@@ -442,20 +448,21 @@ def whatsapp_webhook():
                                 "1. Enter *100* for *100 referrals in 7 days.*\n"
                                 "2. Enter *500* for *500 referrals in 7 days.*\n\n"
                                 "*Once you choose a referral package, your referral program will begin immediately. You have 7 days to complete it.\n\n"
-                                "For transparency,  our Bot tracks and records all referrals on a dashboard, with a leaderboard displaying each contestant’s referrals in real time.\n\n"
+                                "For transparency, our Bot tracks and records all referrals on a dashboard, with a leaderboard displaying each contestant’s referrals in real time.\n\n"
                                 "Important: Referrals completed beyond the 7-day period will not be eligible for payment.*"
                             )
                             
                     
                     elif message_text in ["100", "500"]:
                         existing_referral_code = get_existing_referral_code(sender_phone)
-                        
+                    
                         if existing_referral_code:
                             send_whatsapp_message(sender_phone, "⚠️ You have already selected a package. Wait for 7 days to choose again.")
                         else:
                             referral_limit = int(message_text)
                             start_time = datetime.utcnow().isoformat()
                     
+                            # Save new referral program data
                             referral_code = save_to_google_sheets(sender_phone, sender_name, 
                                                                   referral_limit=referral_limit, start_time=start_time)
                     
