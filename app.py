@@ -412,15 +412,15 @@ def check_expired_referrals():
                 days_overdue = (current_time - end_time).days
             
                 # Only send if within 24 hours
-                if days_overdue < 1:
-                    if referral_count >= referral_limit:
-                        message = f"🎉 Congratulations! Your referral challenge is completed.\n\n✅ Target: {referral_limit} referrals\n✅ Your Count: {referral_count}\n\nYour payment will be processed within 24-48 hours."
-                    else:
-                        message = f"⏳ Your referral period has ended.\n\n❌ Target: {referral_limit} referrals\n✅ Your Count: {referral_count}\n\nUnfortunately, you did not qualify for payment."
+               
+                if referral_count >= referral_limit:
+                    message = f"🎉 Congratulations! Your referral challenge is completed.\n\n✅ Target: {referral_limit} referrals\n✅ Your Count: {referral_count}\n\nYour payment will be processed within 24-48 hours."
+                else:
+                    message = f"⏳ Your referral period has ended.\n\n❌ Target: {referral_limit} referrals\n✅ Your Count: {referral_count}\n\nUnfortunately, you did not qualify for payment."
             
-                    print(f"🚀 Sending message to {phone}: {message}")  # Debug log
-                    response = send_whatsapp_template(phone, WHATSAPP_TEMPLATE_NAME, [message])
-                    print(f"📩 WhatsApp API Response: {response}")  # Log API response
+                print(f"🚀 Sending message to {phone}: {message}")  # Debug log
+                response = send_whatsapp_template(phone, WHATSAPP_TEMPLATE_NAME, [message])
+                print(f"📩 WhatsApp API Response: {response}")  # Log API response
                 
                 
 
