@@ -363,6 +363,65 @@ def get_user_data(phone):
     return None  # Return None if the user is not found
 
 
+WHATSAPP_TEMPLATE_NAME = "referral_expired"  # Use the template you created in Meta
+
+def send_whatsapp_template(to, template_name, variables=[]):
+    """Send a WhatsApp template message with dynamic variables."""
+    headers = {
+        "Authorization": f"Bearer {META_WHATSAPP_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "template",
+        "template": {
+            "name": template_name,
+            "language": {"code": "en"},
+            "components": [{
+                "type": "body",
+                "parameters": [{"type": "text", "text": str(var)} for var in variables]
+            }]
+        }
+    }
+    
+    response = requests.post(WHATSAPP_API_URL, json=payload, headers=headers)
+    print(f"📩 Sending Template Message: {payload}")
+    print(f"📩 WhatsApp API Response: {response.json()}")
+    return response.json()
+
+
+def check_expired_referrals():
+    """Check if any users' referral period has expired and send a notification."""
+    users = sheet.get_all_records()
+    current_time = datetime.utcnow()
+
+    for user in users:
+        phone = str(user.get("Phone", "")).strip()
+        start_time_str = user.get("Start Time", "")
+        referral_limit = int(user.get("Referral Limit", "0") or 0)
+        referral_count = int(user.get("Referrals", "0") or 0)
+
+        if start_time_str:
+            start_time = datetime.fromisoformat(start_time_str)
+            end_time = start_time + timedelta(days=7)
+            
+            if current_time >= end_time:  # If the referral period is expired
+                days_overdue = (current_time - end_time).days
+                
+                # Only send if within 24 hours to prevent WhatsApp restriction
+                if days_overdue < 1:
+                    if referral_count >= referral_limit:
+                        message = f"🎉 Congratulations! Your referral challenge is completed.\n\n✅ Target: {referral_limit} referrals\n✅ Your Count: {referral_count}\n\nYour payment will be processed within 24-48 hours."
+                    else:
+                        message = f"⏳ Your referral period has ended.\n\n❌ Target: {referral_limit} referrals\n✅ Your Count: {referral_count}\n\nUnfortunately, you did not qualify for payment."
+
+                    send_whatsapp_template(phone, WHATSAPP_TEMPLATE_NAME, [message])
+
+
+
+
 @app.route("/webhook", methods=["POST", "GET"])
 def whatsapp_webhook():
     if request.method == 'GET':
@@ -524,6 +583,8 @@ def whatsapp_webhook():
                         
                     else:
                         send_whatsapp_message(sender_phone, "❌ Verification failed. Please make sure you’ve saved Mr. Heep’s contact correctly.")
+
+    check_expired_referrals()
 
     return jsonify({"status": "success"}), 200
 
