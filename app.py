@@ -95,7 +95,7 @@ def send_whatsapp_message(to, message):
 
 # Function to extract name from message
 def extract_name(message):
-    match = re.search(r"My name is ([A-Za-z\s]+)", message)
+    match = re.search(r"My name is ([^\n]+)", message)  # Matches everything after "My name is" until a newline
     return match.group(1).strip() if match else "Unknown"
 
 def extract_referral_code(message):
