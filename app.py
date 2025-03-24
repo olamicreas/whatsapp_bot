@@ -560,6 +560,9 @@ def whatsapp_webhook():
                                                             "•⁠  ⁠To complete verification, they should send “VERIFY” to the bot and follow the instructions.\n"
                                                             "•⁠  ⁠Upon successful verification, your referral count will automatically update.\n\n"
                                                             "Start referring today and keep earning—we are rooting for you! 💙")
+                    elif message_text == "check":
+                        check_expired_referrals()
+                        
 
                     elif message_text == "t&c":
                         send_whatsapp_message(sender_phone, TERMS_AND_CONDITIONS)
@@ -587,7 +590,7 @@ def whatsapp_webhook():
                     else:
                         send_whatsapp_message(sender_phone, "❌ Verification failed. Please make sure you’ve saved Mr. Heep’s contact correctly.")
 
-    check_expired_referrals()
+    
 
     return jsonify({"status": "success"}), 200
 
