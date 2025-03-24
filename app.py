@@ -408,6 +408,7 @@ def check_expired_referrals():
             end_time = start_time + timedelta(days=7)
             
             if current_time >= end_time:  # If the referral period is expired
+                print("referral time expired")
                 days_overdue = (current_time - end_time).days
                 
                 # Only send if within 24 hours to prevent WhatsApp restriction
