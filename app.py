@@ -403,32 +403,25 @@ def check_expired_referrals():
         start_time_str = user.get("Start Time", "")
         referral_limit = int(user.get("Referral Limit", "0") or 0)
         referral_count = int(user.get("Referrals", "0") or 0)
+        user_name = user.get("Name", "User")  # Default to "User" if no name
 
         if start_time_str:
             start_time = datetime.fromisoformat(start_time_str)
             end_time = start_time + timedelta(days=7)
-            
+
             if current_time >= end_time:  # If the referral period is expired
                 print("referral time expired")
 
-                # Send different messages based on referral success
-                if referral_count >= referral_limit:
-                    status_message = "🎉 Congratulations! Your referral challenge is completed."
-                else:
-                    status_message = "⏳ Your referral period has ended. Unfortunately, you did not qualify for payment."
-
                 print(f"🚀 Sending message to {phone}")
 
-                # Send the message with separate parameters
+                # Send the message with all 3 required parameters
                 response = send_whatsapp_template(
                     phone, 
                     WHATSAPP_TEMPLATE_NAME, 
-                    [str(referral_count), str(referral_limit)]
+                    [user_name, str(referral_count), str(referral_limit)]  # Pass all 3 values
                 )
 
                 print(f"📩 WhatsApp API Response: {response}")  # Log API response
-                
-                
 
 
 
