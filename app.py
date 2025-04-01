@@ -415,12 +415,17 @@ def check_expired_referrals():
                 print(f"📩 Sending referral expiration message to {phone}")
 
                 # Send the message with all required parameters
-                response = send_whatsapp_template(
-                    phone, 
-                    WHATSAPP_TEMPLATE_NAME, 
-                    [user_name, str(referral_count), str(referral_limit)]  # Pass all 3 values
-                )
-
+                # List of recipients
+                recipients = [phone, MR_HEEP_PHONE]
+                
+                for recipient in recipients:
+                    response = send_whatsapp_template(
+                        recipient, 
+                        WHATSAPP_TEMPLATE_NAME, 
+                        [user_name, str(referral_count), str(referral_limit)]  # Pass all 3 values
+                    )
+                    print(f"📩 WhatsApp API Response for {recipient}: {response}")
+                    
                 print(f"📩 WhatsApp API Response: {response}")  # Log API response
 
 
