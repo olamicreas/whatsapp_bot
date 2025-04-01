@@ -440,6 +440,17 @@ def notify_heep_new_referral(new_user):
     )
 
     print(f"📩 WhatsApp API Response: {response}")
+def get_registered_user(sender_phone):
+    """Fetch a registered user by phone number from Google Sheets."""
+    users = sheet.get_all_records()  # Get all rows as a list of dictionaries
+
+    for user in users:
+        if str(user.get("Phone", "")).strip() == sender_phone.strip():
+            return user  # Return the first matching user
+
+    return None  # Return None if no match is found
+
+
 
 
 @app.route("/webhook", methods=["POST", "GET"])
@@ -593,10 +604,11 @@ def whatsapp_webhook():
                         update_heep_saved_status(sender_phone, verified=True)
                         update_user_saved_status(sender_phone, verified=True)
                         send_whatsapp_message(sender_phone, "✅ Verification successful! Mr. Heep’s contact has been saved.")
-                        new_registered_users = sheet.get_records(Phone=sender_phone)  
-
-                        if new_registered_users:  # Ensure there's at least one match
-                            notify_heep_new_referral(new_registered_users[0])  # Pass the first matching record
+                        # Fetch the registered user and notify Heep
+                        new_registered_user = get_registered_user(sender_phone)
+                        
+                        if new_registered_user:
+                            notify_heep_new_referral(new_registered_user)
                         else:
                             print(f"❌ No user found with phone number: {sender_phone}")
                 
