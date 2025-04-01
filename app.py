@@ -363,7 +363,8 @@ def get_user_data(phone):
     return None  # Return None if the user is not found
 
 
-WHATSAPP_TEMPLATE_NAME = "referral_expired"  # Use the template you created in Meta
+WHATSAPP_TEMPLATE_NAME = "referral_expired"  # Template for expired referrals
+REFERRAL_NOTIFICATION_TEMPLATE = "referral_notification"  # Template for Heep's notification
 
 def send_whatsapp_template(to, template_name, variables=[]):
     """Send a WhatsApp template message with dynamic variables."""
@@ -392,7 +393,6 @@ def send_whatsapp_template(to, template_name, variables=[]):
     return response.json()
 
 
-
 def check_expired_referrals():
     """Check if any users' referral period has expired and send a notification."""
     users = sheet.get_all_records()
@@ -410,11 +410,11 @@ def check_expired_referrals():
             end_time = start_time + timedelta(days=7)
 
             if current_time >= end_time:  # If the referral period is expired
-                print("referral time expired")
+                print("🚀 Referral time expired")
 
-                print(f"🚀 Sending message to {phone}")
+                print(f"📩 Sending referral expiration message to {phone}")
 
-                # Send the message with all 3 required parameters
+                # Send the message with all required parameters
                 response = send_whatsapp_template(
                     phone, 
                     WHATSAPP_TEMPLATE_NAME, 
@@ -423,6 +423,23 @@ def check_expired_referrals():
 
                 print(f"📩 WhatsApp API Response: {response}")  # Log API response
 
+
+def notify_heep_new_referral(new_user):
+    """Send a notification to Heep when a new user is referred."""
+    heep_phone = "2348086326046"  # Your phone number (Heep)
+    new_user_name = new_user.get("Name", "Unknown User")
+    referrer_name = new_user.get("Referred By", "Unknown Referrer")
+    phone_number = new_user.get("Phone", "N/A")
+
+    print(f"🚀 Sending new referral notification to Heep for {new_user_name}")
+
+    response = send_whatsapp_template(
+        heep_phone,
+        REFERRAL_NOTIFICATION_TEMPLATE,
+        [new_user_name, referrer_name, phone_number]  # Ensure all 3 placeholders are filled
+    )
+
+    print(f"📩 WhatsApp API Response: {response}")
 
 
 @app.route("/webhook", methods=["POST", "GET"])
