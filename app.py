@@ -593,6 +593,12 @@ def whatsapp_webhook():
                         update_heep_saved_status(sender_phone, verified=True)
                         update_user_saved_status(sender_phone, verified=True)
                         send_whatsapp_message(sender_phone, "✅ Verification successful! Mr. Heep’s contact has been saved.")
+                        new_registered_users = sheet.get_records(Phone=sender_phone)  
+
+                        if new_registered_users:  # Ensure there's at least one match
+                            notify_heep_new_referral(new_registered_users[0])  # Pass the first matching record
+                        else:
+                            print(f"❌ No user found with phone number: {sender_phone}")
                 
                         # Now update the referral count for the referrer using the "Referred By" information
                         referral_code = get_existing_referral_code(sender_phone)
