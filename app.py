@@ -434,7 +434,7 @@ def notify_heep_new_referral(new_user):
     print(f"🚀 Sending new referral notification to Heep for {new_user_name}")
 
     response = send_whatsapp_template(
-        heep_phone,
+        MR_HEEP_PHONE,
         REFERRAL_NOTIFICATION_TEMPLATE,
         [new_user_name, referrer_name, phone_number]  # Ensure all 3 placeholders are filled
     )
