@@ -1,59 +1,50 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="max-w-md mx-auto bg-white text-gray-900 rounded-2xl shadow-2xl p-8 animate-fade-in">
 
-  <h2 class="text-3xl font-extrabold mb-6 text-center bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
+<div class="bg-white text-gray-900 rounded-2xl shadow-2xl p-8 sm:p-10 space-y-8">
+
+  <!-- Title -->
+  <h2 class="text-3xl sm:text-4xl font-extrabold text-center bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
     Referral Program
   </h2>
 
   <!-- New Registration Section -->
-  <div class="border-b border-gray-200 pb-6 mb-6">
-    <h3 class="text-xl font-semibold mb-4 text-center text-purple-700">Join Now</h3>
+  <div class="border-b border-gray-200 pb-6">
+    <h3 class="text-xl sm:text-2xl font-semibold mb-4 text-center text-purple-700">Join Now</h3>
     <form method="POST" action="/register" class="space-y-4">
       <input type="text" name="name" placeholder="Your Name"
-             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" required>
+             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all" required>
       <input type="text" name="group" placeholder="Group Name (optional)"
-             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
-      <button class="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-3 rounded-lg hover:scale-105 transition-all">
+             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all">
+      <button class="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-3 rounded-lg hover:scale-105 active:scale-95 transition-all duration-200">
         Register
       </button>
     </form>
     <p class="mt-4 text-center text-sm text-gray-600">After registration, you'll get your personal progress page!</p>
   </div>
 
-  <!-- Existing Users Progress Check Section -->
+  <!-- Existing Users Section -->
   <div>
-    <h3 class="text-xl font-semibold mb-4 text-center text-green-600">Already Joined?</h3>
+    <h3 class="text-xl sm:text-2xl font-semibold mb-4 text-center text-green-600">Already Joined?</h3>
     <form id="progressForm" class="space-y-4" onsubmit="redirectToProgress(event)">
       <input type="text" id="groupInput" name="name" placeholder="Enter Your Name"
-             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500" required>
-      <button class="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold py-3 rounded-lg hover:scale-105 transition-all">
+             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 transition-all" required>
+      <button class="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold py-3 rounded-lg hover:scale-105 active:scale-95 transition-all duration-200">
         View My Progress
       </button>
     </form>
   </div>
-
 </div>
-
-<!-- Simple Fade-in Animation -->
-<style>
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(15px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-fade-in {
-  animation: fade-in 0.7s ease-in-out;
-}
-</style>
 
 <!-- Redirect Script -->
 <script>
 function redirectToProgress(event) {
   event.preventDefault();
-  const group = document.getElementById("groupInput").value.trim().toLowerCase().replace(/\s+/g, "_");
-  if (group) {
-    window.location.href = `/progress/${group}`;
+  const name = document.getElementById("groupInput").value.trim().toLowerCase().replace(/\s+/g, "_");
+  if (name) {
+    window.location.href = `/progress/${name}`;
   }
 }
 </script>
+
 {% endblock %}

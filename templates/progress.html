@@ -1,36 +1,62 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="max-w-4xl mx-auto bg-white text-gray-900 rounded-2xl shadow-xl p-8 animate-fade-in">
+
+<div class="bg-white text-gray-900 rounded-2xl shadow-2xl p-6 sm:p-10 max-w-4xl mx-auto animate-fade-slide space-y-8">
+
+  <!-- Individual Progress Section -->
   {% if ref %}
-  <h2 class="text-2xl font-bold mb-4">{{ ref.name }}’s Progress</h2>
-  <p class="text-lg">Group: {{ ref.group }}</p>
-  <p class="text-lg font-semibold mt-2">Total Referrals: <span class="text-purple-600 text-3xl">{{ ref.referrals }}</span></p>
-  <a href="/public" class="inline-block mt-4 text-purple-500 hover:underline">View All</a>
+  <div class="text-center">
+    <h2 class="text-3xl sm:text-4xl font-extrabold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
+      {{ ref.name }}’s Progress
+    </h2>
+    <p class="text-lg sm:text-xl text-gray-700 mb-2">
+      Group: <span class="font-semibold text-purple-700">{{ ref.group }}</span>
+    </p>
+    <p class="text-xl sm:text-2xl font-bold mt-4">
+      Total Referrals: <span class="text-purple-600 text-4xl">{{ ref.referrals }}</span>
+    </p>
+
+    <a href="/public"
+       class="inline-block mt-6 text-white bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-2 rounded-lg font-medium hover:scale-105 active:scale-95 transition-all duration-200 shadow-md">
+       View Leaderboard
+    </a>
+  </div>
   {% endif %}
 
+  <!-- Leaderboard Section -->
   {% if all_refs %}
-  <h2 class="text-2xl font-bold mb-6 text-center">Leaderboard</h2>
-  <table class="w-full border-collapse">
-    <thead>
-      <tr class="bg-gradient-to-r from-purple-600 to-pink-600 text-white">
-        <th class="p-3">Name</th>
-        <th class="p-3">Group</th>
-        <th class="p-3">Referrals</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for k, r in all_refs.items() %}
-      <tr class="hover:bg-gray-100 transition">
-        <td class="p-3 font-medium">{{ r.name }}</td>
-        <td class="p-3">{{ r.group }}</td>
-        <td class="p-3 text-center font-bold text-purple-700">{{ r.referrals }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="animate-fade-slide">
+    <h2 class="text-3xl sm:text-4xl font-extrabold text-center bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-6">
+      Leaderboard
+    </h2>
+
+    <div class="overflow-x-auto rounded-lg shadow-lg">
+      <table class="min-w-full border-collapse">
+        <thead>
+          <tr class="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm sm:text-base">
+            <th class="p-3 sm:p-4 text-left">Name</th>
+            <th class="p-3 sm:p-4 text-left">Group</th>
+            <th class="p-3 sm:p-4 text-center">Referrals</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for k, r in all_refs.items() %}
+          <tr class="hover:bg-gray-100 transition duration-200 text-sm sm:text-base">
+            <td class="p-3 sm:p-4 font-medium">{{ r.name }}</td>
+            <td class="p-3 sm:p-4">{{ r.group }}</td>
+            <td class="p-3 sm:p-4 text-center font-bold text-purple-700">{{ r.referrals }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
   {% endif %}
 </div>
+
 {% endblock %}
+
+<!-- Auto-refresh leaderboard page every 60 seconds -->
 <script>
   if (window.location.pathname === "/public") {
     setInterval(() => location.reload(), 60000);
