@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Referral Signup</title>
+    <style>
+        body { font-family: Arial; background: #f3f4f6; margin: 0; padding: 40px; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 30px; border-radius: 8px; }
+        input, button { width: 100%; padding: 10px; margin: 10px 0; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+<div class="container">
+    {% if error %}
+        <p class="error">{{ error }}</p>
+    {% elif success %}
+        <p class="success">Thanks for signing up! You were referred by {{ referrer_name }}.</p>
+    {% else %}
+        <h2>Signup via Referral</h2>
+        <form method="POST">
+            <input type="text" name="name" placeholder="Your Name">
+            <input type="email" name="email" placeholder="Your Email">
+            <button type="submit">Submit</button>
+        </form>
+    {% endif %}
+</div>
+</body>
+</html>

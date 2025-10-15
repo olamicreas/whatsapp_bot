@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ title or "Referral Program" }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-purple-700 via-pink-600 to-red-500 text-white min-h-screen flex flex-col">
+  <header class="p-6 text-center font-bold text-3xl tracking-wide">
+    Referral Challenge
+  </header>
+  <main class="flex-grow p-4">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="text-center text-sm py-4 opacity-70">
+    &copy; 2025 Referral System
+  </footer>
+</body>
+</html>

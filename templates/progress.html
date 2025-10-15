@@ -1,0 +1,38 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="max-w-4xl mx-auto bg-white text-gray-900 rounded-2xl shadow-xl p-8 animate-fade-in">
+  {% if ref %}
+  <h2 class="text-2xl font-bold mb-4">{{ ref.name }}’s Progress</h2>
+  <p class="text-lg">Group: {{ ref.group }}</p>
+  <p class="text-lg font-semibold mt-2">Total Referrals: <span class="text-purple-600 text-3xl">{{ ref.referrals }}</span></p>
+  <a href="/public" class="inline-block mt-4 text-purple-500 hover:underline">View All</a>
+  {% endif %}
+
+  {% if all_refs %}
+  <h2 class="text-2xl font-bold mb-6 text-center">Leaderboard</h2>
+  <table class="w-full border-collapse">
+    <thead>
+      <tr class="bg-gradient-to-r from-purple-600 to-pink-600 text-white">
+        <th class="p-3">Name</th>
+        <th class="p-3">Group</th>
+        <th class="p-3">Referrals</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for k, r in all_refs.items() %}
+      <tr class="hover:bg-gray-100 transition">
+        <td class="p-3 font-medium">{{ r.name }}</td>
+        <td class="p-3">{{ r.group }}</td>
+        <td class="p-3 text-center font-bold text-purple-700">{{ r.referrals }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}
+<script>
+  if (window.location.pathname === "/public") {
+    setInterval(() => location.reload(), 60000);
+  }
+</script>
