@@ -1,3 +1,4 @@
+gunicorn
 blinker==1.9.0
 cachetools==6.2.1
 certifi==2025.10.5
