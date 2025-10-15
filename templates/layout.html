@@ -2,17 +2,36 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ title or "Referral Program" }}</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Smooth fade and slide animations */
+    @keyframes fade-slide-up {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-slide {
+      animation: fade-slide-up 0.8s ease-in-out;
+    }
+  </style>
 </head>
 <body class="bg-gradient-to-br from-purple-700 via-pink-600 to-red-500 text-white min-h-screen flex flex-col">
-  <header class="p-6 text-center font-bold text-3xl tracking-wide">
+
+  <!-- Header -->
+  <header class="p-6 text-center font-extrabold text-4xl sm:text-5xl tracking-wide drop-shadow-lg animate-fade-slide">
     Referral Challenge
   </header>
-  <main class="flex-grow p-4">
-    {% block content %}{% endblock %}
+
+  <!-- Main content -->
+  <main class="flex-grow p-4 sm:p-6 flex justify-center items-center">
+    <div class="w-full max-w-md sm:max-w-lg animate-fade-slide">
+      {% block content %}{% endblock %}
+    </div>
   </main>
-  <footer class="text-center text-sm py-4 opacity-70">
+
+  <!-- Footer -->
+  <footer class="text-center text-xs sm:text-sm py-4 opacity-80">
     &copy; 2025 Referral System
   </footer>
 </body>
