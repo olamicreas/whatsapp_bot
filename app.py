@@ -8,9 +8,11 @@ from google.auth.transport.requests import Request
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "super_secret_key")
 
-# ---------------------- Config ----------------------
-DATA_FILE = "data.json"
-REF_FILE = "referrals.json"
+PERSISTENT_DIR = os.getenv("PERSISTENT_DIR", "/data")
+os.makedirs(PERSISTENT_DIR, exist_ok=True)
+
+DATA_FILE = os.path.join(PERSISTENT_DIR, "data.json")
+REF_FILE = os.path.join(PERSISTENT_DIR, "referrals.json")
 
 # prefer Render secret file path if present, else local credentials.json
 CRED_FILE = "/etc/secrets/credentials.json" if os.path.exists("/etc/secrets/credentials.json") else "credentials.json"
@@ -51,7 +53,7 @@ def load_json(path, default):
 def save_json(path, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=4)
-
+        
 def get_credentials():
     if os.path.exists(TOKEN_FILE):
         creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
