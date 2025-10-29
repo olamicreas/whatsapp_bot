@@ -1,64 +1,120 @@
 {% extends "layout.html" %}
 {% block content %}
 
-<div class="bg-white text-gray-900 rounded-2xl shadow-2xl p-6 sm:p-10 max-w-4xl mx-auto animate-fade-slide space-y-8">
+<div class="max-w-md mx-auto bg-white text-gray-900 rounded-3xl shadow-2xl p-5 space-y-5 animate-fade-slide">
 
-  <!-- Individual Progress Section -->
-  {% if ref %}
-  <div class="text-center">
-    <h2 class="text-3xl sm:text-4xl font-extrabold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
-      {{ ref.name }}’s Progress
-    </h2>
-    <p class="text-lg sm:text-xl text-gray-700 mb-2">
-      Group: <span class="font-semibold text-purple-700">{{ ref.group }}</span>
-    </p>
-    <p class="text-xl sm:text-2xl font-bold mt-4">
-      Total Referrals: <span class="text-purple-600 text-4xl">{{ ref.referrals }}</span>
-    </p>
-
-    <a href="/public"
-       class="inline-block mt-6 text-white bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-2 rounded-lg font-medium hover:scale-105 active:scale-95 transition-all duration-200 shadow-md">
-       View Leaderboard
-    </a>
-  </div>
-  {% endif %}
-
-  <!-- Leaderboard Section -->
-  {% if all_refs %}
-  <div class="animate-fade-slide">
-    <h2 class="text-3xl sm:text-4xl font-extrabold text-center bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-6">
-      Leaderboard
-    </h2>
-
-    <div class="overflow-x-auto rounded-lg shadow-lg">
-      <table class="min-w-full border-collapse">
-        <thead>
-          <tr class="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm sm:text-base">
-            <th class="p-3 sm:p-4 text-left">Name</th>
-            <th class="p-3 sm:p-4 text-left">Group</th>
-            <th class="p-3 sm:p-4 text-center">Referrals</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for k, r in all_refs.items() %}
-          <tr class="hover:bg-gray-100 transition duration-200 text-sm sm:text-base">
-            <td class="p-3 sm:p-4 font-medium">{{ r.name }}</td>
-            <td class="p-3 sm:p-4">{{ r.group }}</td>
-            <td class="p-3 sm:p-4 text-center font-bold text-purple-700">{{ r.referrals }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  {% if user %}
+  <!-- Top user card -->
+  <div class="flex items-center gap-3">
+    <div class="w-16 h-16 rounded-xl bg-gradient-to-br from-purple-600 to-pink-500 flex items-center justify-center text-white text-xl font-bold shadow-md">
+      T{{ user.team_number }}
+    </div>
+    <div class="flex-1">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-lg font-bold">{{ user.name }}</div>
+          <div class="text-xs text-gray-500">Group: <span class="font-semibold text-purple-600">{{ user.group or "—" }}</span></div>
+        </div>
+        <div class="text-right text-sm">
+          <div class="text-xs text-gray-400">Team</div>
+          <div class="font-bold text-purple-600">{{ user.team_label }}</div>
+        </div>
+      </div>
     </div>
   </div>
+
+  <!-- Big referrals stat -->
+  <div class="p-4 rounded-2xl bg-gradient-to-r from-purple-50 to-pink-50">
+    <div class="text-xs text-gray-500">Team referrals</div>
+    <div class="flex items-baseline justify-between mt-2">
+      <div class="text-4xl font-extrabold text-purple-700">{{ team_info.referrals | default(0) }}</div>
+      <div class="text-right">
+        <div class="text-xs text-gray-500">Goal</div>
+        <div class="text-sm font-semibold text-gray-700">—</div>
+      </div>
+    </div>
+    <div class="mt-3">
+      <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+        {# clamp referrals to 0..100 for width percentage #}
+        {% set referrals_count = team_info.referrals | default(0) %}
+        {% if referrals_count is number %}
+          {% set bar_width = referrals_count if referrals_count <= 100 else 100 %}
+        {% else %}
+          {% set bar_width = 0 %}
+        {% endif %}
+        <div style="width:{{ bar_width }}%;" class="h-2 bg-purple-600"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Team link card -->
+  <div class="p-4 rounded-2xl bg-white/80 border border-gray-100 text-center">
+    <div class="text-xs text-gray-500 mb-2">Your unique referral link</div>
+
+    {% if user.team_link %}
+      <a id="teamLink" href="{{ user.team_link }}" target="_blank" class="block text-indigo-600 font-medium break-words">{{ user.team_link }}</a>
+
+      <div class="mt-3 flex gap-2 justify-center">
+        <button id="copyLinkBtn" class="px-4 py-2 rounded-xl bg-purple-600 text-white font-semibold">Copy</button>
+        <a href="{{ user.team_link }}" target="_blank" class="px-4 py-2 rounded-xl bg-green-500 text-white font-semibold">Open</a>
+      </div>
+    {% else %}
+      <div class="text-sm text-gray-500">Link not assigned — contact admin.</div>
+    {% endif %}
+  </div>
+
+  <!-- Group teams mini leaderboard (h-scroll on mobile) -->
+  <div>
+    <div class="mb-2 flex items-center justify-between">
+      <h3 class="text-sm font-semibold">Team breakdown</h3>
+      <a href="/public" class="text-xs text-indigo-600">View full leaderboard</a>
+    </div>
+
+    {% if group_teams and group_teams|length %}
+      <div class="flex gap-3 overflow-x-auto pb-2">
+        {% for tid, info in group_teams.items()|sort %}
+        <div class="min-w-[140px] p-3 rounded-2xl bg-gray-50 border border-gray-100">
+          <div class="text-xs text-gray-400">Team {{ tid }}</div>
+          <div class="font-bold text-purple-700 text-xl">{{ info.referrals }}</div>
+          <div class="mt-2 text-xs">
+            <a href="{{ TEAM_LINKS[tid|int] }}" target="_blank" class="text-indigo-600">Open link</a>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="text-xs text-gray-500">No data yet — run sync.</div>
+    {% endif %}
+  </div>
   {% endif %}
+
+  <!-- Bottom nav -->
+  <div class="flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2 text-sm text-gray-600">
+      <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10l9-7 9 7v8a2 2 0 01-2 2H5a2 2 0 01-2-2v-8z"/></svg>
+      Home
+    </a>
+
+    <a href="/public" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm">Leaderboard</a>
+  </div>
 </div>
 
-{% endblock %}
-
-<!-- Auto-refresh leaderboard page every 60 seconds -->
 <script>
-  if (window.location.pathname === "/public") {
-    setInterval(() => location.reload(), 60000);
+  // copy link
+  const copyBtn = document.getElementById('copyLinkBtn');
+  if(copyBtn){
+    copyBtn.addEventListener('click', async () => {
+      const linkEl = document.getElementById('teamLink');
+      const link = linkEl ? linkEl.textContent.trim() : '';
+      try {
+        await navigator.clipboard.writeText(link);
+        copyBtn.textContent = 'Copied!';
+        setTimeout(()=>copyBtn.textContent='Copy', 2000);
+      } catch(e) {
+        alert('Copy failed: ' + link);
+      }
+    });
   }
 </script>
+
+{% endblock %}

@@ -1,50 +1,80 @@
 {% extends "layout.html" %}
 {% block content %}
+<!-- App Container -->
+<div class="bg-white text-gray-900 rounded-3xl shadow-2xl p-5 sm:p-6 space-y-5 max-w-md mx-auto">
 
-<div class="bg-white text-gray-900 rounded-2xl shadow-2xl p-8 sm:p-10 space-y-8">
-
-  <!-- Title -->
-  <h2 class="text-3xl sm:text-4xl font-extrabold text-center bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
-    Referral Program
-  </h2>
-
-  <!-- New Registration Section -->
-  <div class="border-b border-gray-200 pb-6">
-    <h3 class="text-xl sm:text-2xl font-semibold mb-4 text-center text-purple-700">Join Now</h3>
-    <form method="POST" action="/register" class="space-y-4">
-      <input type="text" name="name" placeholder="Your Name"
-             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all" required>
-      <input type="text" name="group" placeholder="Group Name (optional)"
-             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all">
-      <button class="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-3 rounded-lg hover:scale-105 active:scale-95 transition-all duration-200">
-        Register
-      </button>
-    </form>
-    <p class="mt-4 text-center text-sm text-gray-600">After registration, you'll get your personal progress page!</p>
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-extrabold text-gray-800">Referral Program</h1>
+      <p class="text-xs text-gray-500">Join, share, and climb the leaderboard</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="/public" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-indigo-50 to-cyan-50 hover:from-indigo-100 hover:to-cyan-100 transition">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v10M12 7v10M16 7v10"/>
+        </svg>
+        <span class="text-xs font-semibold text-indigo-600">Leaderboard</span>
+      </a>
+    </div>
   </div>
 
-  <!-- Existing Users Section -->
-  <div>
-    <h3 class="text-xl sm:text-2xl font-semibold mb-4 text-center text-green-600">Already Joined?</h3>
-    <form id="progressForm" class="space-y-4" onsubmit="redirectToProgress(event)">
-      <input type="text" id="groupInput" name="name" placeholder="Enter Your Name"
-             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 transition-all" required>
-      <button class="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold py-3 rounded-lg hover:scale-105 active:scale-95 transition-all duration-200">
-        View My Progress
+  <!-- Registration Card -->
+  <div class="rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+    <div class="p-4 bg-gradient-to-r from-slate-700 via-slate-600 to-slate-500
+ text-white">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-bold">Join the Challenge</h2>
+          <p class="text-xs opacity-90">Get a team link & start referring</p>
+        </div>
+        <div class="text-right text-xs">
+          <span class="block opacity-80">Teams</span>
+          <span class="font-bold text-2xl">1 → 10</span>
+        </div>
+      </div>
+    </div>
+
+    <form method="POST" action="/register" class="p-4 bg-white">
+      <label class="block text-xs text-gray-500 mb-1">Your Name</label>
+      <input name="name" required
+             class="w-full p-3 rounded-xl border border-gray-200 mb-3 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+             placeholder="e.g. Abdul Oyedotun" />
+
+
+
+      <button class="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 bg-gradient-to-r from-slate-700 via-slate-600 to-slate-500
+ text-white font-bold shadow-md hover:opacity-95 transition">
+        Create Account
       </button>
     </form>
+  </div>
+
+  <!-- Quick Lookup -->
+  <div class="rounded-2xl bg-gray-50 border border-gray-100 p-3 shadow-sm">
+    <label class="block text-xs text-gray-500 mb-2">Already registered?</label>
+    <form onsubmit="redirectToProgress(event)" class="flex gap-2">
+      <input id="groupInput" required placeholder="Enter your name"
+             class="flex-1 p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400" />
+      <button type="submit"
+              class="px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-500 text-white font-semibold hover:opacity-95 transition">
+        View
+      </button>
+    </form>
+    <p class="text-xs text-gray-400 mt-2">Tip: enter the exact name you registered with.</p>
+  </div>
+
+  <!-- Footer -->
+  <div class="text-center text-xs text-gray-400">
+    <span>Built with 💜 — Referral App</span>
   </div>
 </div>
 
-<!-- Redirect Script -->
 <script>
-function redirectToProgress(event) {
-  event.preventDefault();
-  const name = document.getElementById("groupInput").value.trim().toLowerCase().replace(/\s+/g, "_");
-  if (name) {
-    window.location.href = `/progress/${name}`;
-  }
+function redirectToProgress(e){
+  e.preventDefault();
+  const name = document.getElementById('groupInput').value.trim().toLowerCase().replace(/\s+/g,'_');
+  if(name) window.location.href = `/progress/${name}`;
 }
 </script>
-
 {% endblock %}
