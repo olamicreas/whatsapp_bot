@@ -141,65 +141,69 @@ def fetch_contacts_and_update():
 
     try:
         service = build("people", "v1", credentials=creds)
-
-        # pagination-safe fetching
-        connections = []
-        page_token = None
-        while True:
-            resp = service.people().connections().list(
-                resourceName="people/me",
-                personFields="names,emailAddresses,organizations,biographies,userDefined",
-                pageSize=1000,
-                pageToken=page_token
-            ).execute()
-            connections.extend(resp.get("connections", []))
-            page_token = resp.get("nextPageToken")
-            if not page_token:
-                break
-
+        results = service.people().connections().list(
+            resourceName="people/me",
+            personFields="names,emailAddresses,organizations,biographies,userDefined",
+            pageSize=5000
+        ).execute()
+        connections = results.get("connections", [])
         users = load_json(DATA_FILE, [])
 
         # prepare groups -> teams structure from registered users
         groups = {}
         for u in users:
-            group_raw = u.get("group", "") or ""
-            group = group_raw.strip()
-            if not group:
-                continue
-            group_key = group.lower()
-            team_num = int(u.get("team_number", 1))
-            groups.setdefault(group_key, {})
-            lbl = team_label(group, team_num)
-            groups[group_key].setdefault(team_num, {"team_label": lbl, "count": 0})
+            group = u.get("group", "ALL").strip()
+            team_num = u.get("team_number", 1)
+            groups.setdefault(group, {})
+            groups[group].setdefault(team_num, {"team_label": f"TEAM{team_num}", "count": 0})
+
+        # helper to check if a contact mentions a team
+        def contact_mentions_team(contact, team_number):
+            # flexible regex: TEAM1, TEAM 1, TEAM1., TEAM1!
+            token_pattern = re.compile(r"TEAM\s*{}\b".format(team_number), flags=re.I)
+
+            texts = []
+            for field in ["names", "biographies", "organizations", "userDefined"]:
+                if field in contact:
+                    for item in contact[field]:
+                        # collect all possible string values
+                        for key in ["displayName", "value", "name", "title"]:
+                            if key in item and item[key]:
+                                texts.append(item[key])
+
+            combined = " ".join([t for t in texts if t])
+            combined_clean = re.sub(r"[^\w\s]", "", combined)  # remove punctuation
+            if token_pattern.search(combined_clean):
+                return True
+            return False
 
         # scan contacts and increment team counts when matched
         for contact in connections:
-            for group_key, teams in groups.items():
-                rep_group_name = next(
-                    (u.get("group", "").strip() for u in users if (u.get("group", "") or "").strip().lower() == group_key),
-                    group_key
-                )
+            for group, teams in groups.items():
                 for team_num in list(teams.keys()):
-                    if contact_mentions_team(contact, rep_group_name, team_num):
-                        groups[group_key][team_num]["count"] += 1
+                    if contact_mentions_team(contact, team_num):
+                        teams[team_num]["count"] += 1
+                        # debug log
+                        name = contact.get("names", [{"displayName": "Unknown"}])[0]["displayName"]
+                        print(f"[MATCH] {name} counted for {group} TEAM{team_num}")
 
-        # build referrals dict saved to REF_FILE (use normalized TEAM{n})
+        # build referrals dict saved to REF_FILE
         referrals = {}
-        for group_key, teams in groups.items():
-            referrals[group_key] = {}
+        for group, teams in groups.items():
+            referrals[group] = {}
             for team_num, info in teams.items():
-                referrals[group_key][str(team_num)] = {
-                    "team_label": team_label(group_key, team_num),
+                referrals[group][str(team_num)] = {
+                    "team_label": info["team_label"],
                     "referrals": info["count"]
                 }
 
         save_json(REF_FILE, referrals)
         print("[AUTO-UPDATE] Referral counts per group/team synced from Google Contacts.")
         return {"status": "ok", "groups": len(referrals)}
+
     except Exception as e:
         print(f"[ERROR] Failed to update referrals: {e}")
         return {"status": "error", "message": str(e)}
-
 
 def background_updater():
     while True:
