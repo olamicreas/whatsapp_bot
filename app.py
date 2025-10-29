@@ -9,8 +9,9 @@ app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "super_secret_key")
 
 # ---------------------- Config ----------------------
-DATA_FILE = "data.json"         # stores registered users
-REF_FILE = "referrals.json"     # stores referral aggregates
+DATA_FILE = "/etc/secrets/data.json" if os.path.exists("/etc/secrets/data.json") else "data.json"
+REF_FILE = "/etc/secrets/referrals.json" if os.path.exists("/etc/secrets/referrals.json") else "referrals.json"
+
 # prefer Render secret file path if present, else local credentials.json
 CRED_FILE = "/etc/secrets/credentials.json" if os.path.exists("/etc/secrets/credentials.json") else "credentials.json"
 TOKEN_FILE = "token.json"
