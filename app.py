@@ -145,8 +145,9 @@ def fetch_contacts_and_update():
         results = service.people().connections().list(
             resourceName="people/me",
             personFields="names,emailAddresses,organizations,biographies,userDefined",
-            pageSize=5000
+            pageSize=2000   # ✅ max allowed
         ).execute()
+
         connections = results.get("connections", [])
         users = load_json(DATA_FILE, [])
 
