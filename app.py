@@ -73,11 +73,22 @@ def assign_team_global():
     return team_number
 
 def team_label(group_name, team_number):
-    return f"{group_name.strip()} TEAM {team_number}"
+    # unified team label format: TEAM1, TEAM2, ...
+    return f"TEAM{int(team_number)}"
+
 
 # ---------------------- Google matching logic ----------------------
 def contact_mentions_team(contact, group_name, team_number):
-    token_pattern = re.compile(r"\bteam\s*{}\b".format(team_number), flags=re.I)
+    """
+    Look for TEAM matches in many forms:
+      - TEAM1
+      - team1
+      - team 1
+      - team-1
+      - team_01
+      - Team 01
+    """
+    token_pattern = re.compile(r"\bteam[\s_\-]*0*{}\b".format(int(team_number)), flags=re.I)
 
     texts = []
     if "names" in contact:
@@ -96,16 +107,30 @@ def contact_mentions_team(contact, group_name, team_number):
                 texts.append(o.get("title"))
     if "userDefined" in contact:
         for ud in contact["userDefined"]:
-            if ud.get("value"):
-                texts.append(ud.get("value"))
+            if isinstance(ud, dict):
+                if ud.get("value"):
+                    texts.append(ud.get("value"))
+                elif ud.get("key") and ud.get("value"):
+                    texts.append(f"{ud.get('key')} {ud.get('value')}")
+            else:
+                texts.append(str(ud))
 
     combined = " ".join([t for t in texts if t]).lower()
+
     if token_pattern.search(combined):
-        # prefer matches containing group name but accept token-only matches too
-        if group_name.strip().lower() in combined:
-            return True
         return True
+
+    normalized_label = f"team{int(team_number)}"
+    if normalized_label in combined.replace(" ", ""):
+        return True
+
+    if group_name and group_name.strip():
+        if group_name.strip().lower() in combined:
+            if re.search(r"team[\s_\-]*0*{}".format(int(team_number)), combined, flags=re.I):
+                return True
+
     return False
+
 
 # ---------------------- Sync & aggregation ----------------------
 def fetch_contacts_and_update():
@@ -116,38 +141,55 @@ def fetch_contacts_and_update():
 
     try:
         service = build("people", "v1", credentials=creds)
-        results = service.people().connections().list(
-            resourceName="people/me",
-            personFields="names,emailAddresses,organizations,biographies,userDefined",
-            pageSize=5000
-        ).execute()
-        connections = results.get("connections", [])
+
+        # pagination-safe fetching
+        connections = []
+        page_token = None
+        while True:
+            resp = service.people().connections().list(
+                resourceName="people/me",
+                personFields="names,emailAddresses,organizations,biographies,userDefined",
+                pageSize=1000,
+                pageToken=page_token
+            ).execute()
+            connections.extend(resp.get("connections", []))
+            page_token = resp.get("nextPageToken")
+            if not page_token:
+                break
+
         users = load_json(DATA_FILE, [])
 
         # prepare groups -> teams structure from registered users
         groups = {}
         for u in users:
-            group = u.get("group", "").strip()
+            group_raw = u.get("group", "") or ""
+            group = group_raw.strip()
             if not group:
                 continue
-            team_num = u.get("team_number", 1)
-            groups.setdefault(group, {})
-            groups[group].setdefault(team_num, {"team_label": team_label(group, team_num), "count": 0})
+            group_key = group.lower()
+            team_num = int(u.get("team_number", 1))
+            groups.setdefault(group_key, {})
+            lbl = team_label(group, team_num)
+            groups[group_key].setdefault(team_num, {"team_label": lbl, "count": 0})
 
         # scan contacts and increment team counts when matched
         for contact in connections:
-            for group, teams in groups.items():
+            for group_key, teams in groups.items():
+                rep_group_name = next(
+                    (u.get("group", "").strip() for u in users if (u.get("group", "") or "").strip().lower() == group_key),
+                    group_key
+                )
                 for team_num in list(teams.keys()):
-                    if contact_mentions_team(contact, group, team_num):
-                        groups[group][team_num]["count"] += 1
+                    if contact_mentions_team(contact, rep_group_name, team_num):
+                        groups[group_key][team_num]["count"] += 1
 
-        # build referrals dict saved to REF_FILE
+        # build referrals dict saved to REF_FILE (use normalized TEAM{n})
         referrals = {}
-        for group, teams in groups.items():
-            referrals[group] = {}
+        for group_key, teams in groups.items():
+            referrals[group_key] = {}
             for team_num, info in teams.items():
-                referrals[group][str(team_num)] = {
-                    "team_label": info["team_label"],
+                referrals[group_key][str(team_num)] = {
+                    "team_label": team_label(group_key, team_num),
                     "referrals": info["count"]
                 }
 
@@ -157,6 +199,7 @@ def fetch_contacts_and_update():
     except Exception as e:
         print(f"[ERROR] Failed to update referrals: {e}")
         return {"status": "error", "message": str(e)}
+
 
 def background_updater():
     while True:
