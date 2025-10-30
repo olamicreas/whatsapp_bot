@@ -256,43 +256,62 @@ def register():
 
 @app.route("/progress/<ref_id>", methods=["GET", "POST"])
 def progress(ref_id):
-    # Optional: auto-sync
+    # try a quick sync so progress shows latest counts (safe: fetch is idempotent)
     try:
         fetch_contacts_and_update()
     except Exception as e:
         print("[WARN] Auto-sync failed:", e)
 
-    # Load users
+    # load users and find the requested user
     users = load_json(DATA_FILE, [])
-    user = next((u for u in users if u["ref_id"] == ref_id), None)
+    user = next((u for u in users if u.get("ref_id") == ref_id), None)
     if not user:
         return "Invalid referral ID", 404
 
-    # Load referral counts
+    # load referrals (saved by fetch_contacts_and_update)
     referrals = load_json(REF_FILE, {})
-    group = user.get("group", "")
-    team_num = user.get("team_number", 1)
-    team_num_str = str(team_num)
 
-    # Normalize keys to strings
-    group_data = referrals.get(group, {})
-    group_data_str_keys = {str(k): v for k, v in group_data.items()}
+    # Use same default group key as fetch_contacts_and_update (use "ALL" when empty)
+    group_key = (user.get("group") or "").strip() or "ALL"
 
-    # Lookup team info
-    team_info = group_data_str_keys.get(team_num_str) or {
-        "team_label": f"TEAM{team_num}",
-        "referrals": 0
-    }
+    # ensure group data is a dict (may be missing if not yet synced)
+    raw_group_data = referrals.get(group_key, {})
 
-    # Mini leaderboard for group
-    group_teams = dict(
-        sorted(
-            group_data_str_keys.items(),
-            key=lambda kv: int(kv[1].get("referrals", 0)),
-            reverse=True
+    # normalize keys to strings (defensive: fetch writes string keys, but be safe)
+    group_data = {str(k): v for k, v in raw_group_data.items()}
+
+    # team numbers stored as ints on users, but referral keys are strings like "1"
+    team_number = int(user.get("team_number", 1))
+    team_key = str(team_number)
+
+    # lookup team info (fall back to a default if not present)
+    team_info = group_data.get(team_key, {"team_label": f"TEAM{team_number}", "referrals": 0})
+
+    # ensure referrals is an int (Jinja formatting / math works reliably)
+    try:
+        team_info["referrals"] = int(team_info.get("referrals", 0))
+    except Exception:
+        team_info["referrals"] = 0
+
+    # build a sorted mini-leaderboard for the user's group (descending by referrals)
+    try:
+        # convert inner referrals to ints safely for sorting
+        normalized_group_teams = {
+            str(k): {"team_label": v.get("team_label"), "referrals": int(v.get("referrals", 0))}
+            for k, v in group_data.items()
+        }
+        group_teams = dict(
+            sorted(
+                normalized_group_teams.items(),
+                key=lambda kv: int(kv[1].get("referrals", 0)),
+                reverse=True
+            )
         )
-    )
+    except Exception:
+        # fallback to the raw group_data if anything unexpected happens
+        group_teams = group_data
 
+    # referral goal for UI
     referral_goal = 10000
 
     return render_template(
