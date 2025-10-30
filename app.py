@@ -254,37 +254,45 @@ def register():
 
     return redirect(url_for("progress", ref_id=ref_id))
 
-@app.route("/progress/<ref_id>", methods=["POST", "GET"])
+@app.route("/progress/<ref_id>", methods=["GET", "POST"])
 def progress(ref_id):
-    result = fetch_contacts_and_update()
-    if request.args.get("format") == "json" or request.is_json:
-        return jsonify(result)
-    users = load_json(DATA_FILE, [])
-    user = next((u for u in users if u["ref_id"] == ref_id), None)
-    if not user:
-        return "Invalid referral ID", 404
-
-    # Optionally auto-sync before reading REF_FILE
+    # Optional: auto-sync from Google Contacts before reading REF_FILE
     try:
         fetch_contacts_and_update()
     except Exception as e:
         print("[WARN] Auto-sync failed:", e)
 
+    # Load users
+    users = load_json(DATA_FILE, [])
+    user = next((u for u in users if u["ref_id"] == ref_id), None)
+    if not user:
+        return "Invalid referral ID", 404
+
+    # Load referral counts
     referrals = load_json(REF_FILE, {})
+
     group = user.get("group", "")
-    team_num_str = str(user.get("team_number", 1))
+    team_num = user.get("team_number", 1)
+    team_num_str = str(team_num)
+    team_num_int = int(team_num)
 
-    team_info = referrals.get(group, {}).get(
-        team_num_str, {"team_label": f"TEAM{team_num_str}", "referrals": 0}
-    )
+    # Lookup team info safely (check both str and int keys)
+    group_data = referrals.get(group, {})
+    team_info = group_data.get(team_num_str) or group_data.get(team_num_int) or {
+        "team_label": f"TEAM{team_num}",
+        "referrals": 0
+    }
 
-    # Also provide the group's teams for the mini leaderboard
-    group_teams = referrals.get(group, {})
+    # Build group's teams for mini leaderboard
     group_teams = dict(
-        sorted(group_teams.items(), key=lambda kv: int(kv[1].get("referrals", 0)), reverse=True)
+        sorted(
+            group_data.items(),
+            key=lambda kv: int(kv[1].get("referrals", 0)),
+            reverse=True
+        )
     )
 
-    # Referral goal
+    # Referral goal for progress bar
     referral_goal = 10000
 
     return render_template(
