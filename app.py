@@ -261,23 +261,14 @@ def progress(ref_id):
     if not user:
         return "Invalid referral ID", 404
 
-    # Load current referral counts
     referrals = load_json(REF_FILE, {})
-
-    # Determine user's team info
     group = user.get("group", "")
     team_num = str(user.get("team_number", 1))
-
-    # Ensure team_label uses TEAM1 format
-    team_label = f"TEAM{team_num}"
-    
-    # Get referral count for this team in the group
     team_info = referrals.get(group, {}).get(
-        team_num,
-        {"team_label": team_label, "referrals": 0}
+        team_num, {"team_label": user.get("team_label"), "referrals": 0}
     )
 
-    # Provide the group's teams for the mini leaderboard
+    # Also provide the group's teams for the group-specific leaderboard view
     group_teams = referrals.get(group, {}) if group in referrals else {}
 
     # Set referral goal
@@ -289,8 +280,8 @@ def progress(ref_id):
         team_info=team_info,
         group_teams=group_teams,
         all_refs=referrals,
-        TEAM_LINKS=TEAM_LINKS,
-        referral_goal=referral_goal
+        referral_goal=referral_goal,
+        TEAM_LINKS=TEAM_LINKS
     )
 
 
