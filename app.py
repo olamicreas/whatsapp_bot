@@ -1,4 +1,10 @@
-import os, json, threading, time, re, requests
+import os
+import json
+import threading
+import time
+import re
+import base64
+import requests
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -7,7 +13,6 @@ from google.auth.transport.requests import Request
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "super_secret_key")
-
 
 
 DATA_FILE = "data.json"
@@ -23,6 +28,12 @@ TEAMS_PER_GROUP = int(os.getenv("TEAMS_PER_GROUP", 10))
 
 # Optional admin key to protect /sync-now and /migrate-team-links
 ADMIN_KEY = os.getenv("ADMIN_KEY", None)
+
+# GitHub auto-sync config (set these as environment variables on Render)
+GITHUB_TOKEN = os.getenv("GITHUB_PAT", None)
+GITHUB_REPO = os.getenv("GITHUB_REPO", "olamicreas/whatsapp_bot")  # owner/repo
+GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "master")
+GITHUB_API = "https://api.github.com"
 
 # ---------------------- Team links (WhatsApp) ----------------------
 TEAM_LINKS = {
@@ -49,9 +60,79 @@ def load_json(path, default):
         except json.JSONDecodeError:
             return default
 
+def github_put_file(file_path_in_repo: str, local_data) -> dict:
+    """
+    Create or update file_path_in_repo on GITHUB_REPO with JSON content local_data.
+    Returns GitHub API response dict.
+    """
+    if not GITHUB_TOKEN:
+        return {"status": "error", "message": "GITHUB_PAT not set"}
+
+    url = f"{GITHUB_API}/repos/{GITHUB_REPO}/contents/{file_path_in_repo}"
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json"
+    }
+
+    # 1) get current file sha (if exists)
+    get_params = {"ref": GITHUB_BRANCH}
+    try:
+        r = requests.get(url, headers=headers, params=get_params, timeout=20)
+    except Exception as e:
+        return {"status": "error", "message": f"GitHub GET failed: {e}"}
+
+    sha = None
+    if r.status_code == 200:
+        try:
+            resp = r.json()
+            sha = resp.get("sha")
+        except Exception:
+            sha = None
+
+    # Prepare content (JSON)
+    try:
+        content_bytes = json.dumps(local_data, indent=2).encode("utf-8")
+        content_b64 = base64.b64encode(content_bytes).decode("utf-8")
+    except Exception as e:
+        return {"status": "error", "message": f"Encoding failed: {e}"}
+
+    payload = {
+        "message": f"Auto update {file_path_in_repo}",
+        "content": content_b64,
+        "branch": GITHUB_BRANCH
+    }
+    if sha:
+        payload["sha"] = sha
+
+    try:
+        put_r = requests.put(url, headers=headers, json=payload, timeout=30)
+    except Exception as e:
+        return {"status": "error", "message": f"GitHub PUT failed: {e}"}
+
+    try:
+        resp_json = put_r.json()
+    except Exception:
+        resp_json = {"status_code": put_r.status_code, "text": put_r.text}
+
+    if put_r.status_code in (200, 201):
+        return {"status": "ok", "github": resp_json}
+    else:
+        return {"status": "error", "status_code": put_r.status_code, "github": resp_json}
+
 def save_json(path, data):
+    """
+    Save file locally and attempt to push to GitHub in background if configured.
+    """
     with open(path, "w") as f:
         json.dump(data, f, indent=4)
+
+    # push to GitHub in background to avoid blocking requests
+    if GITHUB_TOKEN:
+        try:
+            repo_path = os.path.basename(path)  # push to root of repo with same filename
+            threading.Thread(target=lambda: github_put_file(repo_path, data), daemon=True).start()
+        except Exception as e:
+            app.logger.warning("GitHub push failed (background): %s", e)
 
 def get_credentials():
     if os.path.exists(TOKEN_FILE):
@@ -161,7 +242,7 @@ def fetch_contacts_and_update():
             groups[group].setdefault(team_num, {"team_label": f"TEAM{team_num}", "count": 0})
 
         # helper to check if a contact mentions a team
-        def contact_mentions_team(contact, team_number):
+        def contact_mentions_team_inner(contact, team_number):
             # flexible regex: TEAM1, TEAM 1, TEAM1., TEAM1!
             token_pattern = re.compile(r"TEAM\s*{}\b".format(team_number), flags=re.I)
 
@@ -171,8 +252,10 @@ def fetch_contacts_and_update():
                     for item in contact[field]:
                         # collect all possible string values
                         for key in ["displayName", "value", "name", "title"]:
-                            if key in item and item[key]:
+                            if isinstance(item, dict) and key in item and item[key]:
                                 texts.append(item[key])
+                            elif not isinstance(item, dict):
+                                texts.append(str(item))
 
             combined = " ".join([t for t in texts if t])
             combined_clean = re.sub(r"[^\w\s]", "", combined)  # remove punctuation
@@ -184,10 +267,13 @@ def fetch_contacts_and_update():
         for contact in connections:
             for group, teams in groups.items():
                 for team_num in list(teams.keys()):
-                    if contact_mentions_team(contact, team_num):
+                    if contact_mentions_team_inner(contact, team_num):
                         teams[team_num]["count"] += 1
                         # debug log
-                        name = contact.get("names", [{"displayName": "Unknown"}])[0]["displayName"]
+                        try:
+                            name = contact.get("names", [{"displayName": "Unknown"}])[0].get("displayName", "Unknown")
+                        except Exception:
+                            name = "Unknown"
                         print(f"[MATCH] {name} counted for {group} TEAM{team_num}")
 
         # build referrals dict saved to REF_FILE
@@ -344,8 +430,6 @@ def public():
         except Exception:
             # fallback — keep original if something unexpected
             sorted_refs[group] = teams
-
-    
 
     return render_template("leaderboard.html", all_refs=sorted_refs, TEAM_LINKS=TEAM_LINKS)
 
