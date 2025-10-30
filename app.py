@@ -256,7 +256,7 @@ def register():
 
 @app.route("/progress/<ref_id>", methods=["GET", "POST"])
 def progress(ref_id):
-    # Optional: auto-sync from Google Contacts before reading REF_FILE
+    # Optional: auto-sync
     try:
         fetch_contacts_and_update()
     except Exception as e:
@@ -270,29 +270,29 @@ def progress(ref_id):
 
     # Load referral counts
     referrals = load_json(REF_FILE, {})
-
     group = user.get("group", "")
     team_num = user.get("team_number", 1)
     team_num_str = str(team_num)
-    team_num_int = int(team_num)
 
-    # Lookup team info safely (check both str and int keys)
+    # Normalize keys to strings
     group_data = referrals.get(group, {})
-    team_info = group_data.get(team_num_str) or group_data.get(team_num_int) or {
+    group_data_str_keys = {str(k): v for k, v in group_data.items()}
+
+    # Lookup team info
+    team_info = group_data_str_keys.get(team_num_str) or {
         "team_label": f"TEAM{team_num}",
         "referrals": 0
     }
 
-    # Build group's teams for mini leaderboard
+    # Mini leaderboard for group
     group_teams = dict(
         sorted(
-            group_data.items(),
+            group_data_str_keys.items(),
             key=lambda kv: int(kv[1].get("referrals", 0)),
             reverse=True
         )
     )
 
-    # Referral goal for progress bar
     referral_goal = 10000
 
     return render_template(
