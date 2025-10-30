@@ -1,4 +1,4 @@
-import os, json, threading, time, re
+import os, json, threading, time, re, request
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -254,24 +254,36 @@ def register():
 
     return redirect(url_for("progress", ref_id=ref_id))
 
-@app.route("/progress/<ref_id>")
+@app.route("/progress/<ref_id>", methods=["POST", "GET"])
 def progress(ref_id):
+    if request.get == "GET":
+        return redirect("sync_now")
     users = load_json(DATA_FILE, [])
     user = next((u for u in users if u["ref_id"] == ref_id), None)
     if not user:
         return "Invalid referral ID", 404
 
+    # Optionally auto-sync before reading REF_FILE
+    try:
+        fetch_contacts_and_update()
+    except Exception as e:
+        print("[WARN] Auto-sync failed:", e)
+
     referrals = load_json(REF_FILE, {})
     group = user.get("group", "")
-    team_num = str(user.get("team_number", 1))
+    team_num_str = str(user.get("team_number", 1))
+
     team_info = referrals.get(group, {}).get(
-        team_num, {"team_label": user.get("team_label"), "referrals": 0}
+        team_num_str, {"team_label": f"TEAM{team_num_str}", "referrals": 0}
     )
 
-    # Also provide the group's teams for the group-specific leaderboard view
-    group_teams = referrals.get(group, {}) if group in referrals else {}
+    # Also provide the group's teams for the mini leaderboard
+    group_teams = referrals.get(group, {})
+    group_teams = dict(
+        sorted(group_teams.items(), key=lambda kv: int(kv[1].get("referrals", 0)), reverse=True)
+    )
 
-    # Set referral goal
+    # Referral goal
     referral_goal = 10000
 
     return render_template(
@@ -284,9 +296,10 @@ def progress(ref_id):
         TEAM_LINKS=TEAM_LINKS
     )
 
-
-@app.route("/public")
+@app.route("/public", methods=["POST", "GET"])
 def public():
+    if request.get == "GET":
+        return redirect("sync_now")
     # load saved referrals (group -> { team_num: {team_label, referrals} })
     referrals = load_json(REF_FILE, {})
 
@@ -339,7 +352,7 @@ def sync_now():
     result = fetch_contacts_and_update()
     if request.args.get("format") == "json" or request.is_json:
         return jsonify(result)
-    return redirect(url_for("public"))
+    return redirect(request.referrer)
 
 # ---------------------- Admin: migrate existing users to have team_link ----------------------
 @app.route("/migrate-team-links", methods=["POST", "GET"])
