@@ -257,7 +257,7 @@ def register():
 @app.route("/progress/<ref_id>", methods=["POST", "GET"])
 def progress(ref_id):
     if request.method == "GET":
-        return redirect("sync_now")
+        return redirect(url_for("sync_now"))
     users = load_json(DATA_FILE, [])
     user = next((u for u in users if u["ref_id"] == ref_id), None)
     if not user:
@@ -299,7 +299,7 @@ def progress(ref_id):
 @app.route("/public", methods=["POST", "GET"])
 def public():
     if request.method == "GET":
-        return redirect("sync_now")
+        return redirect(url_for("sync_now"))
     # load saved referrals (group -> { team_num: {team_label, referrals} })
     referrals = load_json(REF_FILE, {})
 
