@@ -256,8 +256,9 @@ def register():
 
 @app.route("/progress/<ref_id>", methods=["POST", "GET"])
 def progress(ref_id):
-    if request.method == "GET":
-        return redirect(url_for("sync_now"))
+    result = fetch_contacts_and_update()
+    if request.args.get("format") == "json" or request.is_json:
+        return jsonify(result)
     users = load_json(DATA_FILE, [])
     user = next((u for u in users if u["ref_id"] == ref_id), None)
     if not user:
@@ -298,8 +299,9 @@ def progress(ref_id):
 
 @app.route("/public", methods=["POST", "GET"])
 def public():
-    if request.method == "GET":
-        return redirect(url_for("sync_now"))
+    result = fetch_contacts_and_update()
+    if request.args.get("format") == "json" or request.is_json:
+        return jsonify(result)
     # load saved referrals (group -> { team_num: {team_label, referrals} })
     referrals = load_json(REF_FILE, {})
 
@@ -315,6 +317,8 @@ def public():
         except Exception:
             # fallback — keep original if something unexpected
             sorted_refs[group] = teams
+
+    
 
     return render_template("leaderboard.html", all_refs=sorted_refs, TEAM_LINKS=TEAM_LINKS)
 
@@ -352,7 +356,7 @@ def sync_now():
     result = fetch_contacts_and_update()
     if request.args.get("format") == "json" or request.is_json:
         return jsonify(result)
-    return redirect(request.referrer)
+    return redirect(url_for("public"))
 
 # ---------------------- Admin: migrate existing users to have team_link ----------------------
 @app.route("/migrate-team-links", methods=["POST", "GET"])
