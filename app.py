@@ -31,7 +31,7 @@ TEAMS_PER_GROUP = int(os.getenv("TEAMS_PER_GROUP", 10))
 ADMIN_KEY = os.getenv("ADMIN_KEY", None)
 
 # GitHub auto-push config (set these as environment variables)
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")                # required for auto-push
+GITHUB_TOKEN = os.getenv("GITHUB_PAT")                # required for auto-push
 GITHUB_REPO = os.getenv("GITHUB_REPO", "olamicreas/whatsapp_bot")  # owner/repo
 GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "master")    # branch to commit to
 
