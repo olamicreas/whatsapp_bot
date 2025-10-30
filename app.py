@@ -1,3 +1,4 @@
+# app.py
 import os
 import json
 import threading
@@ -14,7 +15,7 @@ from google.auth.transport.requests import Request
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "super_secret_key")
 
-
+# ---------------------- Config ----------------------
 DATA_FILE = "data.json"
 REF_FILE = "referrals.json"
 
@@ -29,11 +30,10 @@ TEAMS_PER_GROUP = int(os.getenv("TEAMS_PER_GROUP", 10))
 # Optional admin key to protect /sync-now and /migrate-team-links
 ADMIN_KEY = os.getenv("ADMIN_KEY", None)
 
-# GitHub auto-sync config (set these as environment variables on Render)
-GITHUB_TOKEN = os.getenv("GITHUB_PAT", None)
+# GitHub auto-push config (set these as environment variables)
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")                # required for auto-push
 GITHUB_REPO = os.getenv("GITHUB_REPO", "olamicreas/whatsapp_bot")  # owner/repo
-GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "master")
-GITHUB_API = "https://api.github.com"
+GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "master")    # branch to commit to
 
 # ---------------------- Team links (WhatsApp) ----------------------
 TEAM_LINKS = {
@@ -60,79 +60,108 @@ def load_json(path, default):
         except json.JSONDecodeError:
             return default
 
-def github_put_file(file_path_in_repo: str, local_data) -> dict:
-    """
-    Create or update file_path_in_repo on GITHUB_REPO with JSON content local_data.
-    Returns GitHub API response dict.
-    """
+def _github_api_headers():
+    """Return headers for GitHub API if token present."""
     if not GITHUB_TOKEN:
-        return {"status": "error", "message": "GITHUB_PAT not set"}
-
-    url = f"{GITHUB_API}/repos/{GITHUB_REPO}/contents/{file_path_in_repo}"
-    headers = {
-        "Authorization": f"Bearer {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github+json"
+        return None
+    return {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "referral-app-bot"
     }
 
-    # 1) get current file sha (if exists)
-    get_params = {"ref": GITHUB_BRANCH}
+def _github_get_file_sha(repo, path, branch="master"):
+    """Return file sha if file exists on GitHub, else None."""
+    headers = _github_api_headers()
+    if not headers:
+        return None
+    owner_repo = repo
+    url = f"https://api.github.com/repos/{owner_repo}/contents/{path}?ref={branch}"
     try:
-        r = requests.get(url, headers=headers, params=get_params, timeout=20)
+        r = requests.get(url, headers=headers, timeout=15)
+        if r.status_code == 200:
+            data = r.json()
+            return data.get("sha")
+        return None
     except Exception as e:
-        return {"status": "error", "message": f"GitHub GET failed: {e}"}
+        print(f"[GITHUB] GET file failed: {e}")
+        return None
 
-    sha = None
-    if r.status_code == 200:
-        try:
-            resp = r.json()
-            sha = resp.get("sha")
-        except Exception:
-            sha = None
-
-    # Prepare content (JSON)
-    try:
-        content_bytes = json.dumps(local_data, indent=2).encode("utf-8")
-        content_b64 = base64.b64encode(content_bytes).decode("utf-8")
-    except Exception as e:
-        return {"status": "error", "message": f"Encoding failed: {e}"}
-
+def _github_put_file(repo, path, content_bytes, message, branch="master", sha=None):
+    """Create or update a file on GitHub. Returns response dict or raises."""
+    headers = _github_api_headers()
+    if not headers:
+        raise RuntimeError("GITHUB_TOKEN not configured")
+    url = f"https://api.github.com/repos/{repo}/contents/{path}"
     payload = {
-        "message": f"Auto update {file_path_in_repo}",
-        "content": content_b64,
-        "branch": GITHUB_BRANCH
+        "message": message,
+        "content": base64.b64encode(content_bytes).decode("utf-8"),
+        "branch": branch
     }
     if sha:
         payload["sha"] = sha
-
-    try:
-        put_r = requests.put(url, headers=headers, json=payload, timeout=30)
-    except Exception as e:
-        return {"status": "error", "message": f"GitHub PUT failed: {e}"}
-
-    try:
-        resp_json = put_r.json()
-    except Exception:
-        resp_json = {"status_code": put_r.status_code, "text": put_r.text}
-
-    if put_r.status_code in (200, 201):
-        return {"status": "ok", "github": resp_json}
+    r = requests.put(url, headers=headers, json=payload, timeout=20)
+    if r.status_code in (200, 201):
+        return r.json()
     else:
-        return {"status": "error", "status_code": put_r.status_code, "github": resp_json}
+        # raise helpful error
+        raise RuntimeError(f"GitHub API error {r.status_code}: {r.text}")
 
-def save_json(path, data):
+def push_file_to_github(path, commit_message=None):
     """
-    Save file locally and attempt to push to GitHub in background if configured.
+    Push local file `path` to GitHub repo configured by GITHUB_REPO.
+    - Only runs if GITHUB_TOKEN and GITHUB_REPO are set.
+    - Returns dict with result info, or {'skipped': True} when not configured.
     """
-    with open(path, "w") as f:
-        json.dump(data, f, indent=4)
+    if not GITHUB_TOKEN or not GITHUB_REPO:
+        print("[GITHUB] Skipping push: GITHUB_TOKEN or GITHUB_REPO not set.")
+        return {"skipped": True}
 
-    # push to GitHub in background to avoid blocking requests
-    if GITHUB_TOKEN:
+    if not os.path.exists(path):
+        print(f"[GITHUB] Local file {path} not found, skipping push.")
+        return {"skipped": True}
+
+    try:
+        with open(path, "rb") as f:
+            content = f.read()
+    except Exception as e:
+        print(f"[GITHUB] Failed to read {path}: {e}")
+        return {"error": str(e)}
+
+    repo = GITHUB_REPO
+    branch = GITHUB_BRANCH
+    commit_message = commit_message or f"Auto-update {os.path.basename(path)}"
+
+    try:
+        sha = _github_get_file_sha(repo, path, branch=branch)
+        result = _github_put_file(repo, path, content, commit_message, branch=branch, sha=sha)
+        print(f"[GITHUB] Pushed {path} to {repo}@{branch} (sha: {result.get('content',{}).get('sha')})")
+        return {"ok": True, "response": result}
+    except Exception as e:
+        print(f"[GITHUB] Push failed for {path}: {e}")
+        return {"error": str(e)}
+
+def save_json(path, data, push_to_github=True):
+    """
+    Save JSON locally and optionally push to GitHub.
+    Only automatically pushes DATA_FILE and REF_FILE to avoid leaking secrets.
+    """
+    try:
+        with open(path, "w") as f:
+            json.dump(data, f, indent=4)
+    except Exception as e:
+        print(f"[ERROR] Failed writing {path}: {e}")
+        raise
+
+    # Only push the main data files by default
+    if push_to_github and path in (DATA_FILE, REF_FILE):
         try:
-            repo_path = os.path.basename(path)  # push to root of repo with same filename
-            threading.Thread(target=lambda: github_put_file(repo_path, data), daemon=True).start()
+            res = push_file_to_github(path, commit_message=f"Auto-update {path}")
+            return res
         except Exception as e:
-            app.logger.warning("GitHub push failed (background): %s", e)
+            print(f"[WARN] GitHub push failed for {path}: {e}")
+            return {"error": str(e)}
+    return {"saved_local": True}
 
 def get_credentials():
     if os.path.exists(TOKEN_FILE):
@@ -158,7 +187,6 @@ def assign_team_global():
 def team_label(group_name, team_number):
     # unified team label format: TEAM1, TEAM2, ...
     return f"TEAM{int(team_number)}"
-
 
 # ---------------------- Google matching logic ----------------------
 def contact_mentions_team(contact, group_name, team_number):
@@ -214,7 +242,6 @@ def contact_mentions_team(contact, group_name, team_number):
 
     return False
 
-
 # ---------------------- Sync & aggregation ----------------------
 def fetch_contacts_and_update():
     creds = get_credentials()
@@ -242,7 +269,7 @@ def fetch_contacts_and_update():
             groups[group].setdefault(team_num, {"team_label": f"TEAM{team_num}", "count": 0})
 
         # helper to check if a contact mentions a team
-        def contact_mentions_team_inner(contact, team_number):
+        def contact_mentions_team_local(contact, team_number):
             # flexible regex: TEAM1, TEAM 1, TEAM1., TEAM1!
             token_pattern = re.compile(r"TEAM\s*{}\b".format(team_number), flags=re.I)
 
@@ -252,10 +279,8 @@ def fetch_contacts_and_update():
                     for item in contact[field]:
                         # collect all possible string values
                         for key in ["displayName", "value", "name", "title"]:
-                            if isinstance(item, dict) and key in item and item[key]:
+                            if key in item and item[key]:
                                 texts.append(item[key])
-                            elif not isinstance(item, dict):
-                                texts.append(str(item))
 
             combined = " ".join([t for t in texts if t])
             combined_clean = re.sub(r"[^\w\s]", "", combined)  # remove punctuation
@@ -267,13 +292,10 @@ def fetch_contacts_and_update():
         for contact in connections:
             for group, teams in groups.items():
                 for team_num in list(teams.keys()):
-                    if contact_mentions_team_inner(contact, team_num):
+                    if contact_mentions_team(contact, group, team_num):
                         teams[team_num]["count"] += 1
                         # debug log
-                        try:
-                            name = contact.get("names", [{"displayName": "Unknown"}])[0].get("displayName", "Unknown")
-                        except Exception:
-                            name = "Unknown"
+                        name = contact.get("names", [{"displayName": "Unknown"}])[0]["displayName"]
                         print(f"[MATCH] {name} counted for {group} TEAM{team_num}")
 
         # build referrals dict saved to REF_FILE
@@ -286,7 +308,8 @@ def fetch_contacts_and_update():
                     "referrals": info["count"]
                 }
 
-        save_json(REF_FILE, referrals)
+        # save locally and push to GitHub (if configured)
+        save_json(REF_FILE, referrals, push_to_github=True)
         print("[AUTO-UPDATE] Referral counts per group/team synced from Google Contacts.")
         return {"status": "ok", "groups": len(referrals)}
 
@@ -330,13 +353,14 @@ def register():
         "registered_at": int(time.time())
     }
     users.append(new_user)
-    save_json(DATA_FILE, users)
+    # save local and push to GitHub (DATA_FILE)
+    save_json(DATA_FILE, users, push_to_github=True)
 
     # ensure referrals structure has the team initialized
     referrals = load_json(REF_FILE, {})
     referrals.setdefault("ALL", {})
     referrals["ALL"].setdefault(str(team_number), {"team_label": label, "referrals": 0})
-    save_json(REF_FILE, referrals)
+    save_json(REF_FILE, referrals, push_to_github=True)
 
     return redirect(url_for("progress", ref_id=ref_id))
 
@@ -485,7 +509,7 @@ def migrate_team_links():
                 u["team_link"] = TEAM_LINKS.get(int(tn))
                 changed += 1
     if changed > 0:
-        save_json(DATA_FILE, users)
+        save_json(DATA_FILE, users, push_to_github=True)
     return jsonify({"status": "ok", "updated": changed})
 
 # ---------------------- Start ----------------------
