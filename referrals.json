@@ -3,6 +3,10 @@
         "1": {
             "team_label": "TEAM 1",
             "referrals": 0
+        },
+        "2": {
+            "team_label": "TEAM 2",
+            "referrals": 0
         }
     }
 }
