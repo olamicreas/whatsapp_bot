@@ -483,8 +483,15 @@ def progress(ref_id):
     # ensure group data keys are strings
     group_data = {str(k): v for k, v in raw_group_data.items()}
 
-    # team number fallback
-    team_number = int(user.get("team_number") or user.get("assigned_number") or 1)
+    # ✅ SAFE conversion for team_number
+    team_number = user.get("team_number")
+    if team_number is None:
+        team_number = user.get("assigned_number", 1)
+    try:
+        team_number = int(team_number)
+    except (TypeError, ValueError):
+        team_number = 1
+
     team_key = str(team_number)
 
     team_info = group_data.get(team_key, {"team_label": f"TEAM{team_number}", "referrals": 0})
@@ -524,21 +531,43 @@ def progress(ref_id):
 
 @app.route("/public", methods=["POST", "GET"])
 def public():
+    # Always fetch fresh data from GitHub and update referral stats
     result = fetch_contacts_and_update()
+
+    # Return JSON if requested
     if request.args.get("format") == "json" or request.is_json:
         return jsonify(result)
 
     referrals = load_json(REF_FILE, {})
 
-    # Pre-sort groups by referrals
+    # ✅ Pre-sort groups safely (works for both TEAM and SOLO)
     sorted_refs = {}
     for group, teams in referrals.items():
         try:
-            sorted_list = sorted(teams.items(), key=lambda kv: int(kv[1].get("referrals", 0)), reverse=True)
-            sorted_refs[group] = {k: v for k, v in sorted_list}
-        except Exception:
+            # Ensure we’re iterating a dict
+            if isinstance(teams, dict):
+                safe_teams = {}
+                for k, v in teams.items():
+                    # normalize and ensure integer referral count
+                    try:
+                        ref_count = int(v.get("referrals", 0) or 0)
+                    except (TypeError, ValueError):
+                        ref_count = 0
+                    safe_teams[str(k)] = {
+                        "team_label": v.get("team_label") or f"TEAM{k}",
+                        "referrals": ref_count
+                    }
+
+                # Sort safely by referral count
+                sorted_list = sorted(safe_teams.items(), key=lambda kv: kv[1]["referrals"], reverse=True)
+                sorted_refs[group] = {k: v for k, v in sorted_list}
+            else:
+                sorted_refs[group] = teams
+        except Exception as e:
+            print(f"[WARN] Failed to sort group {group}: {e}")
             sorted_refs[group] = teams
 
+    # ✅ Render the leaderboard safely
     return render_template(
         "leaderboard.html",
         all_refs=sorted_refs,
