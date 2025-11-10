@@ -33,6 +33,10 @@
         "gisthood": {
             "team_label": "REF002",
             "referrals": 0
+        },
+        "godwin": {
+            "team_label": "REF003",
+            "referrals": 0
         }
     }
 }
