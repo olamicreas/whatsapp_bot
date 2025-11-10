@@ -6,6 +6,7 @@ import time
 import re
 import base64
 import requests
+from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -18,6 +19,7 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "super_secret_key")
 # ---------------------- Config ----------------------
 DATA_FILE = "data.json"
 REF_FILE = "referrals.json"
+DAILY_FILE = os.getenv("DAILY_FILE", "daily_refs.json")  # new: daily snapshots storage
 
 # prefer Render secret file path if present, else local credentials.json
 CRED_FILE = "/etc/secrets/credentials.json" if os.path.exists("/etc/secrets/credentials.json") else "credentials.json"
@@ -405,6 +407,68 @@ def background_updater():
         fetch_contacts_and_update()
         time.sleep(UPDATE_INTERVAL)
 
+# ---------------------- New: Daily snapshots helpers & routes ----------------------
+def build_today_snapshot():
+    """
+    Reads REF_FILE and converts into a simple mapping label->count for today.
+    Labels:
+      - Team entries under "ALL" -> keys become "TEAM{n}"
+      - Solo entries under "SOLO" keep their keys (e.g. "REF001")
+    Returns {"date": "YYYY-MM-DD", "counts": {label: int, ...}}
+    """
+    refs = load_json(REF_FILE, {})
+    counts = {}
+
+    # Teams: ALL (may be grouped under different group keys; pick top-level ALL)
+    all_map = refs.get("ALL", {}) if isinstance(refs, dict) else {}
+    for k, v in all_map.items():
+        try:
+            c = int(v.get("referrals", 0))
+        except Exception:
+            c = 0
+        try:
+            label = f"TEAM{int(k)}"
+        except Exception:
+            label = f"TEAM{str(k)}"
+        counts[label] = c
+
+    # Solos
+    solo_map = refs.get("SOLO", {}) or {}
+    for k, v in solo_map.items():
+        try:
+            c = int(v.get("referrals", 0))
+        except Exception:
+            c = 0
+        counts[str(k)] = c  # keep key as-is (REF001 etc)
+
+    return {"date": datetime.utcnow().date().isoformat(), "counts": counts}
+
+def read_daily_file():
+    return load_json(DAILY_FILE, {"days": []})
+
+def append_daily_snapshot(snapshot):
+    """
+    Append today's snapshot only if not already present for today's date.
+    Keep at most 30 entries (oldest removed).
+    Returns (ok: bool, reason: str)
+    """
+    data = read_daily_file()
+    days = data.get("days", [])
+
+    today = snapshot["date"]
+    if days and days[-1].get("date") == today:
+        # already recorded today
+        return False, "already_exists"
+
+    days.append(snapshot)
+    # keep only last 30 days
+    if len(days) > 30:
+        days = days[-30:]
+    data["days"] = days
+    # Use save_json but avoid pushing DAILY_FILE to GitHub by setting push_to_github False
+    save_json(DAILY_FILE, data, push_to_github=False)
+    return True, "saved"
+
 # ---------------------- Routes ----------------------
 @app.route("/")
 def index():
@@ -695,6 +759,117 @@ def migrate_team_links():
     if changed > 0:
         save_json(DATA_FILE, users, push_to_github=True)
     return jsonify({"status": "ok", "updated": changed})
+
+# ---------------------- New routes: daily snapshots & display ----------------------
+@app.route("/daily-progress", methods=["GET"])
+def daily_progress():
+    """
+    Display 30-day daily snapshots grid and accumulated totals.
+    If no daily file exists, automatically initialize Day 1 with today's snapshot.
+    """
+    daily = read_daily_file()
+    days = daily.get("days", [])
+
+    if not days:
+        # initialize with today's snapshot as day 1
+        today_snapshot = build_today_snapshot()
+        append_daily_snapshot(today_snapshot)
+        daily = read_daily_file()
+        days = daily.get("days", [])
+
+    # padded_days: length 30 (placeholders for future days)
+    padded_days = list(days)[:]  # shallow copy
+    while len(padded_days) < 30:
+        padded_days.append({"date": None, "counts": {}})
+
+    # Build list of all labels (team and solo) appearing across snapshots or current REF_FILE
+    refs = load_json(REF_FILE, {})
+    labels_set = set()
+    # Teams from REF_FILE ALL
+    for k in (refs.get("ALL") or {}).keys():
+        try:
+            labels_set.add(f"TEAM{int(k)}")
+        except Exception:
+            labels_set.add(f"TEAM{str(k)}")
+    # Solos from REF_FILE SOLO
+    for k in (refs.get("SOLO") or {}).keys():
+        labels_set.add(str(k))
+
+    # Also include labels discovered in existing daily days (if any)
+    for d in days:
+        for label in d.get("counts", {}).keys():
+            labels_set.add(str(label))
+
+    # Prepare user mapping: label -> display name (if possible)
+    users = load_json(DATA_FILE, []) or []
+    label_to_name = {}
+    for u in users:
+        lbl = (u.get("team_label") or "").strip()
+        if lbl:
+            # prefer explicit team_label -> name mapping
+            label_to_name[lbl] = u.get("name") or lbl
+        # for teams, add TEAM# mapping if team_number exists
+        tn = u.get("team_number")
+        if tn is not None:
+            label_to_name[f"TEAM{int(tn)}"] = label_to_name.get(f"TEAM{int(tn)}", f"Team {tn}")
+
+    # Build rows: each row contains 30 day counts + total
+    rows = []
+    for label in sorted(labels_set):
+        day_counts = []
+        total = 0
+        for d in padded_days:
+            c = 0
+            if d.get("counts") and label in d["counts"]:
+                try:
+                    c = int(d["counts"][label])
+                except Exception:
+                    c = 0
+            day_counts.append(c)
+            total += c
+        rows.append({
+            "label": label,
+            "name": label_to_name.get(label, label),
+            "day_counts": day_counts,
+            "total": total
+        })
+
+    # Determine index of the latest recorded day (0-based)
+    latest_index = len(days) - 1
+    latest_index = max(0, latest_index)
+
+    # sort rows by latest day (daily leaderboard)
+    rows_sorted_by_latest = sorted(rows, key=lambda r: r["day_counts"][latest_index], reverse=True)
+    # sort totals for accumulation leaderboard
+    totals_sorted = sorted(rows, key=lambda r: r["total"], reverse=True)
+
+    # prepare day_dates list length 30
+    day_dates = [d.get("date") for d in padded_days]
+
+    return render_template(
+        "daily_progress.html",
+        day_dates=day_dates,
+        rows=rows_sorted_by_latest,
+        totals_sorted=totals_sorted,
+        latest_index=latest_index
+    )
+
+@app.route("/daily-progress/snapshot", methods=["POST"])
+def daily_progress_snapshot():
+    """
+    Admin-protected endpoint to append today's snapshot.
+    Accepts form field 'admin_password' or header 'X-Admin-Password'.
+    """
+    ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "ContactBatch321!")
+    pw = request.form.get("admin_password") or request.headers.get("X-Admin-Password", "")
+    if pw != ADMIN_PASSWORD:
+        return jsonify({"ok": False, "reason": "forbidden"}), 403
+
+    snapshot = build_today_snapshot()
+    ok, reason = append_daily_snapshot(snapshot)
+    return jsonify({"ok": ok, "reason": reason, "date": snapshot["date"]})
+
+# ---------------------- End new daily routes ----------------------
 
 if __name__ == "__main__":
     # start background updater (daemon)
