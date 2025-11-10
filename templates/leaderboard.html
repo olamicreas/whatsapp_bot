@@ -17,6 +17,10 @@
   @keyframes growWidth { from { width: 0%; } to { width: var(--w, 0%); } }
 
   .bg-blob { position: absolute; inset: 0; pointer-events: none; z-index: 0; filter: blur(30px) saturate(120%); opacity: 0.18; }
+
+  /* search box small tweaks */
+  #leaderboardSearch { width: 100%; padding: .6rem .8rem; border-radius: .6rem; border: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.03); color: #fff; }
+  .no-results { text-align:center; padding:1rem; color:#cbd5e1; font-size: .95rem; }
 </style>
 
 <div class="relative overflow-hidden">
@@ -36,11 +40,18 @@
   </svg>
 
   <div class="space-y-6 relative z-10 animate-fade-slide">
-    <div class="text-center">
+
+    <!-- Header + Search -->
+    <div class="max-w-md mx-auto text-center">
       <h1 class="text-3xl sm:text-4xl font-extrabold shimmer">
         <span class="bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 via-indigo-300 to-violet-400">🏆 Global Leaderboard</span>
       </h1>
       <p class="mt-2 text-sm text-gray-300/80">Top performing teams across all groups</p>
+
+      <!-- Search input -->
+      <div class="mt-4">
+        <input id="leaderboardSearch" placeholder="Search teams, group, REF code or team number (e.g. TEAM1, REF001, GroupName)" type="search" />
+      </div>
     </div>
 
     {# flatten all teams (excluding SOLO) for top5 calculation #}
@@ -57,7 +68,7 @@
     {% set top5 = top_sorted[-5:] | reverse %}
 
     {% if top5 %}
-    <div class="max-w-md mx-auto bg-white/10 border border-white/10 rounded-3xl p-4 shadow-xl backdrop-blur-lg">
+    <div id="topTeams" class="max-w-md mx-auto bg-white/10 border border-white/10 rounded-3xl p-4 shadow-xl backdrop-blur-lg">
       <div class="flex items-center justify-between mb-3">
         <div class="text-sm text-gray-300">Top Teams</div>
         <div class="text-xs text-cyan-300">Live</div>
@@ -65,7 +76,8 @@
 
       <div class="grid grid-cols-1 gap-2">
         {% for t in top5 %}
-        <div class="flex items-center justify-between p-3 bg-white/5 rounded-xl" style="animation: slideUpFade .45s ease both; animation-delay: {{ loop.index0 * 0.05 }}s;">
+        <div class="flex items-center justify-between p-3 bg-white/5 rounded-xl team-card"
+             data-tid="{{ t.tid }}" data-label="{{ t.label }}" data-group="{{ t.group }}" style="animation: slideUpFade .45s ease both; animation-delay: {{ loop.index0 * 0.05 }}s;">
           <div>
             <div class="text-sm font-semibold text-white">{{ t.label }}</div>
             <div class="text-xs text-gray-400">{{ t.group }} · Team {{ t.tid }}</div>
@@ -83,7 +95,7 @@
     {# SOLO / Individual REF section #}
     {% set solo = all_refs.get('SOLO') if all_refs is mapping else None %}
     {% if solo and solo|length %}
-    <div class="max-w-md mx-auto bg-white/6 border border-white/10 rounded-3xl p-4 shadow-lg backdrop-blur-md">
+    <div id="soloSection" class="max-w-md mx-auto bg-white/6 border border-white/10 rounded-3xl p-4 shadow-lg backdrop-blur-md">
       <div class="flex items-center justify-between mb-3">
         <div>
           <h3 class="text-lg font-bold text-white">Individual REF</h3>
@@ -94,7 +106,8 @@
 
       <div class="space-y-2">
         {% for ref_key, info in solo.items() %}
-        <div class="flex items-center justify-between p-3 rounded-xl bg-white/5">
+        <div class="flex items-center justify-between p-3 rounded-xl bg-white/5 solo-card"
+             data-refkey="{{ ref_key }}" data-label="{{ info.team_label or ref_key }}">
           <div>
             <div class="text-sm font-semibold text-white">{{ info.team_label or ref_key }}</div>
             <div class="text-xs text-gray-400">{{ ref_key }}</div>
@@ -115,11 +128,11 @@
     {% endif %}
 
     {# Full grouped leaderboard (skip SOLO group) #}
-    <div class="space-y-5">
+    <div id="groupsContainer" class="space-y-5">
       {% if all_refs %}
         {% for group, teams in all_refs.items() %}
           {% if group != 'SOLO' %}
-            <section class="max-w-md mx-auto bg-white/10 border border-white/10 rounded-3xl p-4 shadow-lg backdrop-blur-md">
+            <section class="group-section max-w-md mx-auto bg-white/10 border border-white/10 rounded-3xl p-4 shadow-lg backdrop-blur-md" data-group-name="{{ group }}">
               <header class="flex items-center justify-between mb-3">
                 <div>
                   <h3 class="text-lg font-bold text-white">{{ group }}</h3>
@@ -132,7 +145,8 @@
                 {% for tid, info in teams.items() %}
                   {% set referrals = info.referrals | default(0) %}
                   {% set pct = (referrals if referrals <= 100 else 100) %}
-                  <article class="p-3 rounded-xl bg-white/5 flex items-center justify-between gap-3"
+                  <article class="team-article p-3 rounded-xl bg-white/5 flex items-center justify-between gap-3 team-card"
+                           data-tid="{{ tid }}" data-label="{{ info.team_label }}" data-group="{{ group }}"
                            style="animation: slideUpFade .45s ease both; animation-delay: {{ loop.index0 * 0.06 }}s;">
                     <div class="flex items-center gap-3">
                       <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-indigo-600 to-cyan-500 text-white font-bold shadow">
@@ -168,6 +182,11 @@
       {% endif %}
     </div>
 
+    <!-- No results element (hidden by default) -->
+    <div id="noResults" class="max-w-md mx-auto no-results hidden">
+      No matches found. Try a different search (team label, team number, group name, or REF code).
+    </div>
+
     {% if user %}
     <div class="max-w-md mx-auto bg-white/10 border border-white/10 rounded-3xl p-4 shadow-lg backdrop-blur-md" style="animation: slideUpFade .45s ease both; animation-delay: .05s;">
       <div class="flex items-center justify-between">
@@ -198,19 +217,105 @@
 </div>
 
 <script>
-  const copyBtn = document.getElementById('copyLinkBtn');
-  if (copyBtn) {
-    copyBtn.addEventListener('click', async () => {
-      const linkEl = document.getElementById('teamLink');
-      if (!linkEl) return;
-      try {
-        await navigator.clipboard.writeText(linkEl.value);
-        copyBtn.textContent = 'Copied!';
-        setTimeout(() => copyBtn.textContent = 'Copy', 1600);
-      } catch(e) {
-        alert('Copy failed — copy manually: ' + linkEl.value);
-      }
-    });
+  // debounce helper
+  function debounce(fn, wait) {
+    let t;
+    return function (...args) {
+      clearTimeout(t);
+      t = setTimeout(() => fn.apply(this, args), wait);
+    };
   }
+
+  (function () {
+    const input = document.getElementById('leaderboardSearch');
+    const teamCards = () => Array.from(document.querySelectorAll('.team-card'));
+    const soloCards = () => Array.from(document.querySelectorAll('.solo-card'));
+    const groupSections = () => Array.from(document.querySelectorAll('.group-section'));
+    const noResultsEl = document.getElementById('noResults');
+
+    function normalize(s){
+      return (s || '').toString().trim().toLowerCase();
+    }
+
+    function matchesQuery(el, q) {
+      if (!q) return true;
+      // check data attributes first
+      const tid = normalize(el.dataset.tid || '');
+      const label = normalize(el.dataset.label || el.textContent);
+      const group = normalize(el.dataset.group || '');
+      const refkey = normalize(el.dataset.refkey || '');
+      // text snapshot
+      const text = normalize(el.textContent || '');
+      return tid.includes(q) || label.includes(q) || group.includes(q) || refkey.includes(q) || text.includes(q);
+    }
+
+    function runFilter() {
+      const qRaw = input ? input.value : '';
+      const q = normalize(qRaw);
+
+      let visibleCount = 0;
+
+      // filter team cards (top teams + group teams)
+      teamCards().forEach(el => {
+        const ok = matchesQuery(el, q);
+        el.style.display = ok ? '' : 'none';
+        if (ok) visibleCount++;
+      });
+
+      // filter solo cards
+      soloCards().forEach(el => {
+        const ok = matchesQuery(el, q);
+        el.style.display = ok ? '' : 'none';
+        if (ok) visibleCount++;
+      });
+
+      // hide entire group sections if none of their .team-card children visible
+      groupSections().forEach(section => {
+        const cards = Array.from(section.querySelectorAll('.team-card'));
+        const anyVisible = cards.some(c => c.style.display !== 'none');
+        section.style.display = anyVisible ? '' : 'none';
+      });
+
+      // Top teams block: hide if none visible inside it
+      const topBlock = document.getElementById('topTeams');
+      if (topBlock) {
+        const anyTop = Array.from(topBlock.querySelectorAll('.team-card')).some(c => c.style.display !== 'none');
+        topBlock.style.display = anyTop ? '' : 'none';
+      }
+
+      // Solo section
+      const soloSection = document.getElementById('soloSection');
+      if (soloSection) {
+        const anySolo = Array.from(soloSection.querySelectorAll('.solo-card')).some(c => c.style.display !== 'none');
+        soloSection.style.display = anySolo ? '' : 'none';
+      }
+
+      // Show no results when nothing visible
+      if (visibleCount === 0) {
+        noResultsEl.classList.remove('hidden');
+      } else {
+        noResultsEl.classList.add('hidden');
+      }
+    }
+
+    const debounced = debounce(runFilter, 180);
+    if (input) {
+      input.addEventListener('input', debounced);
+      // allow Enter to go to a progress page when user types a ref_id or name
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const val = normalize(input.value);
+          if (!val) return;
+          // quick heuristic: if value looks like a ref_id/name (no spaces or underscores preferred) redirect
+          // we normalize similarly to server normalize_ref_id: lowercase, spaces->underscore, strip invalid
+          const normalized = val.replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+          window.location.href = `/progress/${normalized}`;
+        }
+      });
+    }
+
+    // run once on load to ensure initial state
+    document.addEventListener('DOMContentLoaded', runFilter);
+  })();
 </script>
 {% endblock %}
