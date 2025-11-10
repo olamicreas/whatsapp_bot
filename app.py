@@ -639,7 +639,7 @@ def public():
 
     # ✅ Render the leaderboard safely
     return "SOON"
-   """ return render_template(
+    """return render_template(
         "leaderboard.html",
         all_refs=sorted_refs,
         TEAM_LINKS=TEAM_LINKS,
