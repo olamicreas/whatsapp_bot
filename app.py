@@ -35,7 +35,6 @@ GITHUB_TOKEN = os.getenv("GITHUB_PAT")                # required for auto-push
 GITHUB_REPO = os.getenv("GITHUB_REPO", "olamicreas/whatsapp_bot")  # owner/repo
 GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "master")    # branch to commit to
 
-# ---------------------- Team links (WhatsApp) ----------------------
 # ---------------------- WhatsApp referral links ----------------------
 TEAM_LINKS = {
     1: "https://wa.link/0a7pj3",
@@ -56,37 +55,18 @@ SOLO_LINKS = {
 TEAMS_PER_GROUP = 5
 SOLO_COUNT = 5
 
-# ---------------------- Assign links ----------------------
-def assign_link(reg_type):
-    """
-    Round-robin assign:
-     - for reg_type == "team" -> TEAM links (1..TEAMS_PER_GROUP)
-     - for reg_type == "solo" -> SOLO links (1..SOLO_COUNT)
-    Returns: (number, link)
-    """
-    if reg_type == "team":
-        users = [u for u in load_json(DATA_FILE, []) if u.get("registration_type") == "team"]
-        team_number = (len(users) % TEAMS_PER_GROUP) + 1
-        return team_number, TEAM_LINKS.get(team_number)
-    elif reg_type == "solo":
-        users = [u for u in load_json(DATA_FILE, []) if u.get("registration_type") == "solo"]
-        solo_number = (len(users) % SOLO_COUNT) + 1
-        return solo_number, SOLO_LINKS.get(solo_number)
-    else:
-        # default to team 1
-        return 1, TEAM_LINKS.get(1)
-
-
-# ---------------------- Helpers ----------------------
+# ---------------------- Helpers: file + GitHub ----------------------
 def load_json(path, default):
+    """Load JSON file, return default if missing/corrupt."""
     if not os.path.exists(path):
         with open(path, "w") as f:
             json.dump(default, f)
-    with open(path, "r") as f:
-        try:
+        return default
+    try:
+        with open(path, "r") as f:
             return json.load(f)
-        except json.JSONDecodeError:
-            return default
+    except Exception:
+        return default
 
 def _github_api_headers():
     """Return headers for GitHub API if token present."""
@@ -98,25 +78,40 @@ def _github_api_headers():
         "User-Agent": "referral-app-bot"
     }
 
-def _github_get_file_sha(repo, path, branch="master"):
-    """Return file sha if file exists on GitHub, else None."""
+def _github_get_file_content(repo, path, branch=GITHUB_BRANCH):
+    """
+    Return tuple (decoded_text_or_None, sha_or_None).
+    Uses GitHub contents API to fetch file content and sha.
+    """
     headers = _github_api_headers()
     if not headers:
-        return None
-    owner_repo = repo
-    url = f"https://api.github.com/repos/{owner_repo}/contents/{path}?ref={branch}"
+        return None, None
+    url = f"https://api.github.com/repos/{repo}/contents/{path}?ref={branch}"
     try:
         r = requests.get(url, headers=headers, timeout=15)
         if r.status_code == 200:
             data = r.json()
-            return data.get("sha")
-        return None
+            content_b64 = data.get("content", "")
+            sha = data.get("sha")
+            # API sometimes returns content with newlines; decode robustly
+            try:
+                decoded = base64.b64decode(content_b64).decode("utf-8")
+            except Exception:
+                # fallback: try to load as-is
+                decoded = content_b64
+            return decoded, sha
+        # Not found or other response -> no remote
+        return None, None
     except Exception as e:
         print(f"[GITHUB] GET file failed: {e}")
-        return None
+        return None, None
 
-def _github_put_file(repo, path, content_bytes, message, branch="master", sha=None):
-    """Create or update a file on GitHub. Returns response dict or raises."""
+def _github_put_file(repo, path, content_bytes, message, branch=GITHUB_BRANCH, sha=None):
+    """
+    Create or update a file on GitHub via REST API.
+    Expects content_bytes (raw bytes) which will be base64 encoded.
+    Returns response JSON on success or raises RuntimeError.
+    """
     headers = _github_api_headers()
     if not headers:
         raise RuntimeError("GITHUB_TOKEN not configured")
@@ -132,14 +127,13 @@ def _github_put_file(repo, path, content_bytes, message, branch="master", sha=No
     if r.status_code in (200, 201):
         return r.json()
     else:
-        # raise helpful error
         raise RuntimeError(f"GitHub API error {r.status_code}: {r.text}")
 
 def push_file_to_github(path, commit_message=None):
     """
     Push local file `path` to GitHub repo configured by GITHUB_REPO.
-    - Only runs if GITHUB_TOKEN and GITHUB_REPO are set.
-    - Returns dict with result info, or {'skipped': True} when not configured.
+    - If file exists remotely, uses its sha to update (prevents accidental overwrite).
+    - Returns dict with result info or {'skipped': True} when not configured.
     """
     if not GITHUB_TOKEN or not GITHUB_REPO:
         print("[GITHUB] Skipping push: GITHUB_TOKEN or GITHUB_REPO not set.")
@@ -160,9 +154,10 @@ def push_file_to_github(path, commit_message=None):
     branch = GITHUB_BRANCH
     commit_message = commit_message or f"Auto-update {os.path.basename(path)}"
 
+    # Get remote sha (if exists)
+    _, remote_sha = _github_get_file_content(repo, path, branch=branch)
     try:
-        sha = _github_get_file_sha(repo, path, branch=branch)
-        result = _github_put_file(repo, path, content, commit_message, branch=branch, sha=sha)
+        result = _github_put_file(repo, path, content, commit_message, branch=branch, sha=remote_sha)
         print(f"[GITHUB] Pushed {path} to {repo}@{branch} (sha: {result.get('content',{}).get('sha')})")
         return {"ok": True, "response": result}
     except Exception as e:
@@ -172,107 +167,172 @@ def push_file_to_github(path, commit_message=None):
 def save_json(path, data, push_to_github=True):
     """
     Save JSON locally and optionally push to GitHub.
-    Only automatically pushes DATA_FILE and REF_FILE to avoid leaking secrets.
+    When pushing DATA_FILE or REF_FILE, first attempt to merge with remote contents to avoid accidental overwrites.
+    - DATA_FILE expected to be a list of user dicts. Merge unique by 'ref_id' (local wins).
+    - REF_FILE expected to be a dict; merged with remote dict (local wins).
     """
+    # Defensive: ensure directories exist
     try:
-        with open(path, "w") as f:
-            json.dump(data, f, indent=4)
+        # Merge with remote if pushing
+        if push_to_github and path in (DATA_FILE, REF_FILE) and GITHUB_TOKEN and GITHUB_REPO:
+            remote_text, remote_sha = _github_get_file_content(GITHUB_REPO, path, branch=GITHUB_BRANCH)
+            if remote_text:
+                try:
+                    remote_data = json.loads(remote_text)
+                except Exception:
+                    remote_data = None
+            else:
+                remote_data = None
+
+            # Merge logic
+            if path == DATA_FILE:
+                # expect list
+                local_list = data if isinstance(data, list) else []
+                remote_list = remote_data if isinstance(remote_data, list) else []
+                # Build map remote by ref_id
+                merged_map = {}
+                for item in remote_list:
+                    if isinstance(item, dict):
+                        rid = item.get("ref_id")
+                        if rid:
+                            merged_map[rid] = item
+                # Overlay with local items (local wins)
+                for item in local_list:
+                    if isinstance(item, dict):
+                        rid = item.get("ref_id")
+                        if rid:
+                            merged_map[rid] = item
+                merged_list = list(merged_map.values())
+                # write merged_list locally
+                with open(path, "w") as f:
+                    json.dump(merged_list, f, indent=4)
+                # push merged content
+                try:
+                    return push_file_to_github(path, commit_message=f"Auto-update {path}")
+                except Exception as e:
+                    print(f"[WARN] GitHub push failed after merging: {e}")
+                    return {"error": str(e)}
+            else:
+                # REF_FILE or other object file -> merge dicts
+                local_dict = data if isinstance(data, dict) else {}
+                remote_dict = remote_data if isinstance(remote_data, dict) else {}
+                merged = remote_dict.copy()
+                merged.update(local_dict)  # local wins on conflicts
+                with open(path, "w") as f:
+                    json.dump(merged, f, indent=4)
+                try:
+                    return push_file_to_github(path, commit_message=f"Auto-update {path}")
+                except Exception as e:
+                    print(f"[WARN] GitHub push failed after merging dict: {e}")
+                    return {"error": str(e)}
+        else:
+            # Normal local save only
+            with open(path, "w") as f:
+                json.dump(data, f, indent=4)
+            return {"saved_local": True}
     except Exception as e:
-        print(f"[ERROR] Failed writing {path}: {e}")
+        print(f"[ERROR] Failed saving {path}: {e}")
         raise
 
-    # Only push the main data files by default
-    if push_to_github and path in (DATA_FILE, REF_FILE):
-        try:
-            res = push_file_to_github(path, commit_message=f"Auto-update {path}")
-            return res
-        except Exception as e:
-            print(f"[WARN] GitHub push failed for {path}: {e}")
-            return {"error": str(e)}
-    return {"saved_local": True}
-
-def get_credentials():
-    if os.path.exists(TOKEN_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-        if creds and creds.valid:
-            return creds
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            with open(TOKEN_FILE, "w") as token:
-                token.write(creds.to_json())
-            return creds
-    return None
-
+# ---------------------- Utilities ----------------------
 def normalize_ref_id(s):
-    return re.sub(r"\s+", "_", s.strip().lower())
+    """Lowercase, trim, replace whitespace with underscore, remove unusual chars."""
+    if not s:
+        return ""
+    s = s.strip().lower()
+    s = re.sub(r"\s+", "_", s)
+    # keep a-z0-9_ only
+    s = re.sub(r"[^a-z0-9_]", "", s)
+    return s
 
 # ---------------------- Team & Registration logic ----------------------
-def assign_team_global():
+def assign_link(reg_type):
+    """
+    Round-robin assign:
+     - for reg_type == "team" -> TEAM links (1..TEAMS_PER_GROUP)
+     - for reg_type == "solo" -> SOLO links (1..SOLO_COUNT)
+    Returns: (number, link)
+    """
+    reg_type = (reg_type or "team").strip().lower()
     users = load_json(DATA_FILE, [])
-    team_number = (len(users) % TEAMS_PER_GROUP) + 1
-    return team_number
+    if reg_type == "team":
+        team_users = [u for u in users if u.get("registration_type") == "team"]
+        team_number = (len(team_users) % TEAMS_PER_GROUP) + 1
+        return team_number, TEAM_LINKS.get(team_number)
+    elif reg_type == "solo":
+        solo_users = [u for u in users if u.get("registration_type") == "solo"]
+        solo_number = (len(solo_users) % SOLO_COUNT) + 1
+        return solo_number, SOLO_LINKS.get(solo_number)
+    else:
+        return 1, TEAM_LINKS.get(1)
 
 def team_label(group_name, team_number):
     # unified team label format: TEAM1, TEAM2, ...
     return f"TEAM{int(team_number)}"
 
-# ---------------------- Google matching logic ----------------------
-def contact_mentions_team(contact, group_name, team_number):
+# ---------------------- Google contact mention helpers ----------------------
+def contact_mentions_team(contact, team_number):
     """
-    Look for TEAM matches in many forms:
-      - TEAM1
-      - team1
-      - team 1
-      - team-1
-      - team_01
-      - Team 01
+    True if contact contains 'TEAM{team_number}' in any scanned field.
+    Accepts 'TEAM1', 'TEAM 1', 'team-01', etc.
     """
     token_pattern = re.compile(r"\bteam[\s_\-]*0*{}\b".format(int(team_number)), flags=re.I)
-
     texts = []
-    if "names" in contact:
-        for n in contact["names"]:
-            if n.get("displayName"):
-                texts.append(n.get("displayName"))
-    if "biographies" in contact:
-        for b in contact["biographies"]:
-            if b.get("value"):
-                texts.append(b.get("value"))
-    if "organizations" in contact:
-        for o in contact["organizations"]:
-            if o.get("name"):
-                texts.append(o.get("name"))
-            if o.get("title"):
-                texts.append(o.get("title"))
-    if "userDefined" in contact:
-        for ud in contact["userDefined"]:
-            if isinstance(ud, dict):
-                if ud.get("value"):
-                    texts.append(ud.get("value"))
-                elif ud.get("key") and ud.get("value"):
-                    texts.append(f"{ud.get('key')} {ud.get('value')}")
-            else:
-                texts.append(str(ud))
-
+    for field in ("names", "biographies", "organizations", "userDefined"):
+        if field in contact:
+            for item in contact.get(field, []):
+                if isinstance(item, dict):
+                    # common keys
+                    for key in ("displayName", "value", "name", "title"):
+                        val = item.get(key)
+                        if val:
+                            texts.append(str(val))
+                else:
+                    texts.append(str(item))
     combined = " ".join([t for t in texts if t]).lower()
+    # remove punctuation so that 'team-1' or 'team.1' still matches
+    combined_clean = re.sub(r"[^\w\s]", " ", combined)
+    return bool(token_pattern.search(combined_clean)) or (f"team{team_number}" in combined_clean.replace(" ", ""))
 
-    if token_pattern.search(combined):
+def contact_mentions_ref(contact, ref_number):
+    """
+    True if contact contains 'REF{zero_padded}' or 'REF {n}' etc.
+    e.g. ref_number=1 -> matches REF001, REF 001, ref1, ref 1
+    """
+    # allow zero padding
+    token_pattern = re.compile(r"\bref[\s_\-]*0*{}\b".format(int(ref_number)), flags=re.I)
+    texts = []
+    for field in ("names", "biographies", "organizations", "userDefined"):
+        if field in contact:
+            for item in contact.get(field, []):
+                if isinstance(item, dict):
+                    for key in ("displayName", "value", "name", "title"):
+                        val = item.get(key)
+                        if val:
+                            texts.append(str(val))
+                else:
+                    texts.append(str(item))
+    combined = " ".join([t for t in texts if t]).lower()
+    combined_clean = re.sub(r"[^\w\s]", " ", combined)
+    if token_pattern.search(combined_clean):
         return True
-
-    normalized_label = f"team{int(team_number)}"
-    if normalized_label in combined.replace(" ", ""):
+    # also check compact form like 'ref001'
+    if f"ref{str(ref_number).zfill(3)}" in combined.replace(" ", ""):
         return True
-
-    if group_name and group_name.strip():
-        if group_name.strip().lower() in combined:
-            if re.search(r"team[\s_\-]*0*{}".format(int(team_number)), combined, flags=re.I):
-                return True
-
     return False
 
 # ---------------------- Sync & aggregation ----------------------
 def fetch_contacts_and_update():
-    creds = get_credentials()
+    """
+    Reads Google Contacts, counts occurrences of team labels (per group) and REFxxx for solos,
+    then writes referrals to REF_FILE (and optionally pushes to GitHub).
+    """
+    creds = None
+    try:
+        creds = get_credentials()
+    except Exception:
+        creds = None
+
     if not creds:
         print("[INFO] No credentials yet. Visit /auth to connect Google Contacts.")
         return {"status": "no-credentials"}
@@ -282,7 +342,7 @@ def fetch_contacts_and_update():
         results = service.people().connections().list(
             resourceName="people/me",
             personFields="names,emailAddresses,organizations,biographies,userDefined",
-            pageSize=2000   # ✅ max allowed
+            pageSize=2000   # max allowed
         ).execute()
 
         connections = results.get("connections", [])
@@ -291,44 +351,27 @@ def fetch_contacts_and_update():
         # prepare groups -> teams structure from registered users
         groups = {}
         for u in users:
-            group = u.get("group", "ALL").strip()
-            team_num = u.get("team_number", 1)
+            group = (u.get("group") or "").strip() or "ALL"
+            team_num = u.get("team_number") if u.get("team_number") is not None else u.get("assigned_number", 1)
+            # ensure integer key (we will stringify on save)
+            try:
+                team_num = int(team_num)
+            except Exception:
+                team_num = 1
             groups.setdefault(group, {})
             groups[group].setdefault(team_num, {"team_label": f"TEAM{team_num}", "count": 0})
 
-        # --------------------------
-        # Prepare SOLO/individual refs
-        # We'll count REF001..REF005 (you can expand the range if needed)
-        # --------------------------
-        SOLO_MAX = 5
+        # prepare SOLO refs (REF001..REF005)
+        SOLO_MAX = SOLO_COUNT
         solo_refs = {i: {"ref_label": f"REF{str(i).zfill(3)}", "count": 0} for i in range(1, SOLO_MAX + 1)}
-
-        # helper to check if a contact mentions a team (local helper kept for punctuation-tolerant matching)
-        def contact_mentions_team_local(contact, team_number):
-            token_pattern = re.compile(r"TEAM\s*{}\b".format(team_number), flags=re.I)
-
-            texts = []
-            for field in ["names", "biographies", "organizations", "userDefined"]:
-                if field in contact:
-                    for item in contact[field]:
-                        for key in ["displayName", "value", "name", "title"]:
-                            if isinstance(item, dict) and item.get(key):
-                                texts.append(item.get(key))
-                            elif not isinstance(item, dict) and item:
-                                texts.append(str(item))
-
-            combined = " ".join([t for t in texts if t])
-            combined_clean = re.sub(r"[^\w\s]", "", combined)  # remove punctuation
-            return bool(token_pattern.search(combined_clean))
 
         # scan contacts and increment team counts and solo refs when matched
         for contact in connections:
-            # teams per group
+            # team matches
             for group, teams in groups.items():
                 for team_num in list(teams.keys()):
-                    if contact_mentions_team(contact, group, team_num) or contact_mentions_team_local(contact, team_num):
+                    if contact_mentions_team(contact, team_num):
                         teams[team_num]["count"] += 1
-                        # debug log
                         try:
                             name = contact.get("names", [{"displayName": "Unknown"}])[0].get("displayName", "Unknown")
                         except Exception:
@@ -358,7 +401,6 @@ def fetch_contacts_and_update():
         # add SOLO group with REF001..REF005 counts
         referrals.setdefault("SOLO", {})
         for i, info in solo_refs.items():
-            # store under keys "REF001" (or simply numeric keys if you prefer)
             key = f"REF{str(i).zfill(3)}"
             referrals["SOLO"][key] = {
                 "team_label": info["ref_label"],
@@ -376,13 +418,18 @@ def fetch_contacts_and_update():
 
 def background_updater():
     while True:
-        fetch_contacts_and_update()
+        try:
+            fetch_contacts_and_update()
+        except Exception as e:
+            print("[WARN] background_updater error:", e)
         time.sleep(UPDATE_INTERVAL)
 
 # ---------------------- Routes ----------------------
 @app.route("/")
 def index():
+    # index.html should allow registration_type to be either team or solo (we default to team)
     return render_template("index.html")
+
 @app.route("/register", methods=["POST"])
 def register():
     name = request.form.get("name", "").strip()
@@ -405,7 +452,10 @@ def register():
         assigned_number, assigned_link = (1, TEAM_LINKS.get(1))
 
     # Build label
-    label = f"TEAM{assigned_number}" if reg_type == "team" else f"REF{int(assigned_number):03d}"
+    if reg_type == "team":
+        label = f"TEAM{int(assigned_number)}"
+    else:
+        label = f"REF{int(assigned_number):03d}"
 
     new_user = {
         "name": name,
@@ -418,7 +468,7 @@ def register():
         "registered_at": int(time.time())
     }
 
-    # Merge into existing users list
+    # Append to current users (local) and save (will merge with remote if configured)
     users.append(new_user)
     save_json(DATA_FILE, users, push_to_github=True)
 
@@ -427,59 +477,67 @@ def register():
     referrals.setdefault("ALL", {})
 
     if reg_type == "team":
-        # Only add team if not already present
         referrals["ALL"].setdefault(str(assigned_number), {"team_label": label, "referrals": 0})
     else:
-        # Solo users may have their own entry if needed, but do not overwrite existing teams
         referrals.setdefault("SOLO", {})
+        # For solos we store by ref_id under SOLO so progress can find it if desired
         referrals["SOLO"].setdefault(ref_id, {"team_label": label, "referrals": 0})
 
     save_json(REF_FILE, referrals, push_to_github=True)
 
     return redirect(url_for("progress", ref_id=ref_id))
+
 @app.route("/progress/<ref_id>", methods=["GET", "POST"])
 def progress(ref_id):
+    # normalize incoming ref_id so /progress/Oye or /progress/oye both work
+    ref_id_norm = normalize_ref_id(ref_id)
+
     # try a quick sync so progress shows latest counts (safe: fetch is idempotent)
     try:
         fetch_contacts_and_update()
     except Exception as e:
         print("[WARN] Auto-sync failed:", e)
 
-    # load users and find the requested user
+    # load users and find the requested user (case-insensitive)
     users = load_json(DATA_FILE, [])
-    user = next((u for u in users if u.get("ref_id") == ref_id), None)
+    user = next((u for u in users if normalize_ref_id(u.get("ref_id", "")) == ref_id_norm), None)
     if not user:
         return "Invalid referral ID", 404
 
     # load referrals (saved by fetch_contacts_and_update)
     referrals = load_json(REF_FILE, {})
 
-    # Use same default group key as fetch_contacts_and_update (use "ALL" when empty)
+    # Use default group key "ALL" if user.group missing
     group_key = (user.get("group") or "").strip() or "ALL"
 
-    # ensure group data is a dict (may be missing if not yet synced)
-    raw_group_data = referrals.get(group_key, {})
+    # get group data safely (may be empty)
+    raw_group_data = referrals.get(group_key, {}) or {}
 
-    # normalize keys to strings (defensive: fetch writes string keys, but be safe)
-    group_data = {str(k): v for k, v in raw_group_data.items()}
+    # ensure keys are strings and referrals values are ints for templates
+    group_data = {}
+    for k, v in raw_group_data.items():
+        try:
+            group_data[str(k)] = {
+                "team_label": v.get("team_label"),
+                "referrals": int(v.get("referrals", 0))
+            }
+        except Exception:
+            group_data[str(k)] = {"team_label": v.get("team_label"), "referrals": 0}
 
-    # team numbers stored as ints on users, but referral keys are strings like "1"
-    team_number = int(user.get("team_number") or user.get("assigned_number") or 1)
+    # team_number: prefer explicit team_number; fall back to assigned_number (for solo that may be None)
+    team_number = user.get("team_number") if user.get("team_number") is not None else user.get("assigned_number", 1)
+    try:
+        team_number = int(team_number)
+    except Exception:
+        team_number = int(user.get("assigned_number", 1))
 
     team_key = str(team_number)
 
-    # lookup team info (fall back to a default if not present)
+    # lookup team_info inside group_data; fallback to default structure
     team_info = group_data.get(team_key, {"team_label": f"TEAM{team_number}", "referrals": 0})
 
-    # ensure referrals is an int (Jinja formatting / math works reliably)
+    # build sorted mini leaderboard for the user's group
     try:
-        team_info["referrals"] = int(team_info.get("referrals", 0))
-    except Exception:
-        team_info["referrals"] = 0
-
-    # build a sorted mini-leaderboard for the user's group (descending by referrals)
-    try:
-        # convert inner referrals to ints safely for sorting
         normalized_group_teams = {
             str(k): {"team_label": v.get("team_label"), "referrals": int(v.get("referrals", 0))}
             for k, v in group_data.items()
@@ -492,10 +550,8 @@ def progress(ref_id):
             )
         )
     except Exception:
-        # fallback to the raw group_data if anything unexpected happens
         group_teams = group_data
 
-    # referral goal for UI
     referral_goal = 10000
 
     return render_template(
@@ -505,39 +561,40 @@ def progress(ref_id):
         group_teams=group_teams,
         all_refs=referrals,
         referral_goal=referral_goal,
-        TEAM_LINKS=TEAM_LINKS
+        TEAM_LINKS=TEAM_LINKS,
+        SOLO_LINKS=SOLO_LINKS
     )
 
 @app.route("/public", methods=["POST", "GET"])
 def public():
-    result = fetch_contacts_and_update()
+    # attempt an immediate sync so leaderboard is up-to-date
+    try:
+        result = fetch_contacts_and_update()
+    except Exception as e:
+        result = {"status": "error", "message": str(e)}
+
+    # optionally return JSON result if requested
     if request.args.get("format") == "json" or request.is_json:
         return jsonify(result)
-    # load saved referrals (group -> { team_num: {team_label, referrals} })
+
     referrals = load_json(REF_FILE, {})
 
     # Pre-sort each group's teams by referrals descending
     sorted_refs = {}
     for group, teams in referrals.items():
         try:
-            # teams is dict: team_num -> info
-            # convert to list of tuples sorted by info['referrals'] desc
+            # teams: dict of team_key -> info
             sorted_list = sorted(teams.items(), key=lambda kv: int(kv[1].get("referrals", 0)), reverse=True)
-            # convert back to dict preserving this order
             sorted_refs[group] = {k: v for k, v in sorted_list}
         except Exception:
-            # fallback — keep original if something unexpected
             sorted_refs[group] = teams
 
-    # pass SOLO_LINKS so leaderboard template can render the individual/ref links
     return render_template(
         "leaderboard.html",
         all_refs=sorted_refs,
         TEAM_LINKS=TEAM_LINKS,
         SOLO_LINKS=SOLO_LINKS
     )
-
-
 
 @app.route("/auth")
 def auth():
@@ -595,6 +652,7 @@ def migrate_team_links():
 
 # ---------------------- Start ----------------------
 if __name__ == "__main__":
+    # launch background updater thread only when running directly
     threading.Thread(target=background_updater, daemon=True).start()
     print("✅ Flask app running with automatic Google Contacts sync and team link assignment.")
     app.run(debug=True)
