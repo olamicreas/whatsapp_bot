@@ -386,34 +386,27 @@ def index():
 @app.route("/register", methods=["POST"])
 def register():
     name = request.form.get("name", "").strip()
-    reg_type = request.form.get("registration_type", "team").strip().lower()  # "team" or "solo"
-
+    reg_type = request.form.get("registration_type", "team").strip().lower()
     if not name:
         return redirect(url_for("index"))
 
     ref_id = normalize_ref_id(name)
 
-    # Load the latest data.json from disk
+    # Load existing users
     users = load_json(DATA_FILE, [])
-
-    # Check if user already exists
     existing = next((u for u in users if u.get("ref_id") == ref_id), None)
     if existing:
         return redirect(url_for("progress", ref_id=ref_id))
 
-    # Assign number and link
+    # Assign number & link
     try:
         assigned_number, assigned_link = assign_link(reg_type)
     except Exception:
-        assigned_number, assigned_link = 1, TEAM_LINKS.get(1)
+        assigned_number, assigned_link = (1, TEAM_LINKS.get(1))
 
-    # Build team label
-    if reg_type == "team":
-        label = f"TEAM{int(assigned_number)}"
-    else:
-        label = f"REF{int(assigned_number):03d}"
+    # Build label
+    label = f"TEAM{assigned_number}" if reg_type == "team" else f"REF{int(assigned_number):03d}"
 
-    # New user dictionary
     new_user = {
         "name": name,
         "ref_id": ref_id,
@@ -425,23 +418,25 @@ def register():
         "registered_at": int(time.time())
     }
 
-    # MERGE: ensure no existing users are overwritten
-    users_dict = {u['ref_id']: u for u in users}
-    users_dict[new_user['ref_id']] = new_user
-    merged_users = list(users_dict.values())
+    # Merge into existing users list
+    users.append(new_user)
+    save_json(DATA_FILE, users, push_to_github=True)
 
-    # Save and push safely
-    save_json(DATA_FILE, merged_users, push_to_github=True)
+    # Initialize or update referrals for team users
+    referrals = load_json(REF_FILE, {})
+    referrals.setdefault("ALL", {})
 
-    # Initialize referrals for team registration
     if reg_type == "team":
-        referrals = load_json(REF_FILE, {})
-        referrals.setdefault("ALL", {})
+        # Only add team if not already present
         referrals["ALL"].setdefault(str(assigned_number), {"team_label": label, "referrals": 0})
-        save_json(REF_FILE, referrals, push_to_github=True)
+    else:
+        # Solo users may have their own entry if needed, but do not overwrite existing teams
+        referrals.setdefault("SOLO", {})
+        referrals["SOLO"].setdefault(ref_id, {"team_label": label, "referrals": 0})
+
+    save_json(REF_FILE, referrals, push_to_github=True)
 
     return redirect(url_for("progress", ref_id=ref_id))
-
 @app.route("/progress/<ref_id>", methods=["GET", "POST"])
 def progress(ref_id):
     # try a quick sync so progress shows latest counts (safe: fetch is idempotent)
