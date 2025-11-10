@@ -632,7 +632,11 @@ def progress(ref_id):
             team_info["referrals"] = int(team_info.get("referrals", 0))
         except Exception:
             team_info["referrals"] = 0
+
+        # Default team goal is 10,000 but Team 2 uses 100,000
         referral_goal = 10000
+        if team_number == 2:
+            referral_goal = 100000
 
     # build leaderboard from group_data (teams)
     try:
@@ -650,8 +654,29 @@ def progress(ref_id):
     except Exception:
         group_teams = group_data
 
+    # --- Contest end date (30-day window) ---
+    # Determine contest start from daily file first day, otherwise today.
+    try:
+        daily = read_daily_file()
+        days = daily.get("days", []) if daily and isinstance(daily, dict) else []
+        if days and isinstance(days, list) and days[0].get("date"):
+            start_date_str = days[0]["date"]
+        else:
+            start_date_str = datetime.utcnow().date().isoformat()
+        # parse YYYY-MM-DD -> date
+        try:
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        except Exception:
+            start_date = datetime.utcnow().date()
+        end_date = start_date + timedelta(days=30)
+        contest_end_iso = end_date.isoformat() + "T00:00:00Z"
+    except Exception:
+        # fallback: 30 days from today
+        end_date = datetime.utcnow().date() + timedelta(days=30)
+        contest_end_iso = end_date.isoformat() + "T00:00:00Z"
+
     # DEBUG OPTION (uncomment to log what was chosen)
-    # print("DEBUG progress:", {"ref_id": ref_id, "reg_type": reg_type, "found_solo_key": found_key if reg_type=='solo' else None, "team_info": team_info})
+    # print("DEBUG progress:", {"ref_id": ref_id, "reg_type": reg_type, "found_solo_key": found_key if reg_type=='solo' else None, "team_info": team_info, "contest_end": contest_end_iso})
 
     return render_template(
         "progress.html",
@@ -660,9 +685,9 @@ def progress(ref_id):
         group_teams=group_teams,
         all_refs=referrals,
         referral_goal=referral_goal,
-        TEAM_LINKS=TEAM_LINKS
+        TEAM_LINKS=TEAM_LINKS,
+        contest_end_iso=contest_end_iso
     )
-    
 @app.route("/public", methods=["POST", "GET"])
 def public():
     # Always fetch fresh data from GitHub and update referral stats
