@@ -320,11 +320,11 @@ def fetch_contacts_and_update():
         connections = results.get("connections", [])
         users = load_json(DATA_FILE, [])
 
-        # prepare groups -> teams structure from registered users
+        # Prepare groups -> teams structure from registered users
         groups = {}
         for u in users:
-            group = u.get("group", "ALL").strip()
-            team_num = u.get("team_number", 1)
+            group = (u.get("group") or "ALL").strip()
+            team_num = int(u.get("team_number") or u.get("assigned_number") or 1)
             groups.setdefault(group, {})
             groups[group].setdefault(team_num, {"team_label": f"TEAM{team_num}", "count": 0})
 
@@ -332,7 +332,7 @@ def fetch_contacts_and_update():
         SOLO_MAX = SOLO_COUNT
         solo_refs = {i: {"ref_label": f"REF{str(i).zfill(3)}", "count": 0} for i in range(1, SOLO_MAX + 1)}
 
-        # local helper for punctuation tolerant team detection
+        # Local helper for punctuation-tolerant team detection
         def contact_mentions_team_local(contact, team_number):
             token_pattern = re.compile(r"TEAM\s*{}\b".format(team_number), flags=re.I)
             texts = []
@@ -348,55 +348,58 @@ def fetch_contacts_and_update():
             combined_clean = re.sub(r"[^\w\s]", "", combined)
             return bool(token_pattern.search(combined_clean))
 
-        # scan contacts
+        # Scan contacts
         for contact in connections:
             for group, teams in groups.items():
                 for team_num in list(teams.keys()):
                     if contact_mentions_team(contact, group, team_num) or contact_mentions_team_local(contact, team_num):
-                        teams[team_num]["count"] += 1
+                        teams[team_num]["count"] = int(teams[team_num].get("count") or 0) + 1
                         try:
                             name = contact.get("names", [{"displayName": "Unknown"}])[0].get("displayName", "Unknown")
                         except Exception:
                             name = "Unknown"
                         print(f"[MATCH] {name} counted for {group} TEAM{team_num}")
 
-            # solo refs
+            # SOLO refs
             for i in range(1, SOLO_MAX + 1):
                 if contact_mentions_ref(contact, i):
-                    solo_refs[i]["count"] += 1
+                    solo_refs[i]["count"] = int(solo_refs[i].get("count") or 0) + 1
                     try:
                         name = contact.get("names", [{"displayName": "Unknown"}])[0].get("displayName", "Unknown")
                     except Exception:
                         name = "Unknown"
                     print(f"[MATCH] {name} counted for SOLO {solo_refs[i]['ref_label']}")
 
-        # build referrals dict
+        # Build referrals dict
         referrals = {}
         for group, teams in groups.items():
             referrals[group] = {}
             for team_num, info in teams.items():
+                count = int(info.get("count") or 0)
                 referrals[group][str(team_num)] = {
-                    "team_label": info["team_label"],
-                    "referrals": info["count"]
+                    "team_label": info.get("team_label", f"TEAM{team_num}"),
+                    "referrals": count
                 }
 
-        # add SOLO group
+        # Add SOLO group
         referrals.setdefault("SOLO", {})
         for i, info in solo_refs.items():
+            count = int(info.get("count") or 0)
             key = f"REF{str(i).zfill(3)}"
             referrals["SOLO"][key] = {
-                "team_label": info["ref_label"],
-                "referrals": info["count"]
+                "team_label": info.get("ref_label", key),
+                "referrals": count
             }
 
-        # save locally and push to GitHub (if configured)
+        # Save locally and push to GitHub if configured
         save_json(REF_FILE, referrals, push_to_github=True)
         print("[AUTO-UPDATE] Referral counts per group/team and SOLO synced from Google Contacts.")
         return {"status": "ok", "groups": len(referrals)}
+
     except Exception as e:
         print(f"[ERROR] Failed to update referrals: {e}")
         return {"status": "error", "message": str(e)}
-
+        
 def background_updater():
     while True:
         fetch_contacts_and_update()
