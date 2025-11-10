@@ -529,7 +529,14 @@ def public():
             # fallback — keep original if something unexpected
             sorted_refs[group] = teams
 
-    return render_template("leaderboard.html", all_refs=sorted_refs, TEAM_LINKS=TEAM_LINKS)
+    # pass SOLO_LINKS so leaderboard template can render the individual/ref links
+    return render_template(
+        "leaderboard.html",
+        all_refs=sorted_refs,
+        TEAM_LINKS=TEAM_LINKS,
+        SOLO_LINKS=SOLO_LINKS
+    )
+
 
 
 @app.route("/auth")
