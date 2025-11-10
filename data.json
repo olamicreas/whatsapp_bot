@@ -2,17 +2,11 @@
     {
         "name": "kunle",
         "ref_id": "kunle",
+        "registration_type": "team",
+        "assigned_number": 1,
         "team_number": 1,
-        "team_label": "TEAM 1",
-        "team_link": "https://wa.link/lrg1il",
-        "registered_at": 1761836342
-    },
-    {
-        "name": "oyedotun",
-        "ref_id": "oyedotun",
-        "team_number": 2,
-        "team_label": "TEAM 2",
-        "team_link": "https://wa.link/1trxu8",
-        "registered_at": 1761836355
+        "team_label": "TEAM1",
+        "team_link": "https://wa.link/0a7pj3",
+        "registered_at": 1762737109
     }
 ]
