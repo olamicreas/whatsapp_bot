@@ -352,19 +352,50 @@ def index():
 @app.route("/register", methods=["POST"])
 def register():
     name = request.form["name"].strip()
+    # optional form field to choose registration type: "team" or "solo"
+    reg_type = request.form.get("reg_type", "team").strip().lower()
+
     if not name:
         return redirect(url_for("index"))
 
     ref_id = normalize_ref_id(name)
 
     users = load_json(DATA_FILE, [])
+    # if already registered, go to progress
     if any(user["ref_id"] == ref_id for user in users):
         return redirect(url_for("progress", ref_id=ref_id))
 
-    # assign team globally
-    team_number = assign_team_global()
-    label = f"TEAM {team_number}"
-    team_link = TEAM_LINKS.get(team_number)
+    # ---------------------------
+    # HERE: check capacity before assigning a link
+    # ---------------------------
+    if reg_type == "team":
+        # count only users who registered as team (default or explicit)
+        team_users = [u for u in users if u.get("registration_type", "team") == "team"]
+        if len(team_users) >= TEAMS_PER_GROUP:
+            # all team links taken — block or return friendly message
+            return "Sorry, all team links have been claimed. Please try registering as an individual (solo).", 400
+
+    elif reg_type == "solo":
+        # SOLO_COUNT must be defined (e.g. 5)
+        solo_users = [u for u in users if u.get("registration_type") == "solo"]
+        if len(solo_users) >= SOLO_COUNT:
+            return "Sorry, all solo links have been claimed. Please try registering as a team.", 400
+    # ---------------------------
+    # continue to assign team/solo link
+    # ---------------------------
+
+    if reg_type == "team":
+        # assign team globally
+        team_number = assign_team_global()
+        label = f"TEAM {team_number}"
+        team_link = TEAM_LINKS.get(team_number)
+    else:  # solo
+        # pick next solo index (simple round-robin); adapt if you have a different function
+        solo_users = [u for u in users if u.get("registration_type") == "solo"]
+        solo_number = (len(solo_users) % SOLO_COUNT) + 1
+        team_number = 0  # or use separate field for solo_number if you prefer
+        label = f"REF{solo_number:03d}"
+        team_link = SOLO_LINKS.get(solo_number)
 
     new_user = {
         "name": name,
@@ -372,6 +403,7 @@ def register():
         "team_number": team_number,
         "team_label": label,
         "team_link": team_link,
+        "registration_type": reg_type,   # remember which pool this user came from
         "registered_at": int(time.time())
     }
     users.append(new_user)
@@ -380,12 +412,15 @@ def register():
 
     # ensure referrals structure has the team initialized
     referrals = load_json(REF_FILE, {})
+    # use a single "ALL" group for team-less setups; adapt if you use group keys
     referrals.setdefault("ALL", {})
-    referrals["ALL"].setdefault(str(team_number), {"team_label": label, "referrals": 0})
+    # only initialize numeric team keys for team registrations
+    if reg_type == "team":
+        referrals["ALL"].setdefault(str(team_number), {"team_label": label, "referrals": 0})
     save_json(REF_FILE, referrals, push_to_github=True)
 
     return redirect(url_for("progress", ref_id=ref_id))
-
+    
 @app.route("/progress/<ref_id>", methods=["GET", "POST"])
 def progress(ref_id):
     # try a quick sync so progress shows latest counts (safe: fetch is idempotent)
