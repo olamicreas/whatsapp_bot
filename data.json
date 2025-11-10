@@ -48,5 +48,15 @@
         "team_label": "REF003",
         "team_link": "https://wa.link/yup4kc",
         "registered_at": 1762782534
+    },
+    {
+        "name": "Josh",
+        "ref_id": "josh",
+        "registration_type": "solo",
+        "assigned_number": 4,
+        "team_number": null,
+        "team_label": "REF004",
+        "team_link": "https://wa.link/ze4vj4",
+        "registered_at": 1762782799
     }
 ]
