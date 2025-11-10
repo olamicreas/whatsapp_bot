@@ -29,6 +29,10 @@
         "REF005": {
             "team_label": "REF005",
             "referrals": 0
+        },
+        "gisthood": {
+            "team_label": "REF002",
+            "referrals": 0
         }
     }
 }
