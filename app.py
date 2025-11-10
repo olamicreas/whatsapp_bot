@@ -409,9 +409,21 @@ def background_updater():
 @app.route("/")
 def index():
     return render_template("index.html")
-
 @app.route("/register", methods=["POST"])
 def register():
+    # server-side admin password (set in environment)
+    ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "ContactBatch321!")
+
+    # get posted admin password
+    supplied_pw = request.form.get("admin_password", "")
+
+    # If password mismatch -> render the same registration page with an error
+    if supplied_pw != ADMIN_PASSWORD:
+        # Render the registration template and show an error message
+        # Replace "register.html" with your actual template filename if different
+        return render_template("register.html", error="Invalid admin password. Registration blocked.")
+
+    # --- existing logic (unchanged) ---
     name = request.form.get("name", "").strip()
     reg_type = request.form.get("registration_type", "team").strip().lower()
     if not name:
