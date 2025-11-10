@@ -383,7 +383,6 @@ def background_updater():
 @app.route("/")
 def index():
     return render_template("index.html")
-
 @app.route("/register", methods=["POST"])
 def register():
     name = request.form.get("name", "").strip()
@@ -394,26 +393,27 @@ def register():
 
     ref_id = normalize_ref_id(name)
 
+    # Load the latest data.json from disk
     users = load_json(DATA_FILE, [])
-    # if user exists, redirect to their progress
+
+    # Check if user already exists
     existing = next((u for u in users if u.get("ref_id") == ref_id), None)
     if existing:
         return redirect(url_for("progress", ref_id=ref_id))
 
-    # assign link and number depending on registration type
-    # assign_link(reg_type) should return (number, link) — implement below if not present
+    # Assign number and link
     try:
         assigned_number, assigned_link = assign_link(reg_type)
     except Exception:
-        # fallback: team 1
-        assigned_number, assigned_link = (1, TEAM_LINKS.get(1))
+        assigned_number, assigned_link = 1, TEAM_LINKS.get(1)
 
-    # build label depending on type
+    # Build team label
     if reg_type == "team":
         label = f"TEAM{int(assigned_number)}"
     else:
         label = f"REF{int(assigned_number):03d}"
 
+    # New user dictionary
     new_user = {
         "name": name,
         "ref_id": ref_id,
@@ -425,11 +425,15 @@ def register():
         "registered_at": int(time.time())
     }
 
-    users.append(new_user)
-    # save local and push to GitHub if you enabled push behavior
-    save_json(DATA_FILE, users, push_to_github=True)
+    # MERGE: ensure no existing users are overwritten
+    users_dict = {u['ref_id']: u for u in users}
+    users_dict[new_user['ref_id']] = new_user
+    merged_users = list(users_dict.values())
 
-    # initialize referrals entry for team registrations
+    # Save and push safely
+    save_json(DATA_FILE, merged_users, push_to_github=True)
+
+    # Initialize referrals for team registration
     if reg_type == "team":
         referrals = load_json(REF_FILE, {})
         referrals.setdefault("ALL", {})
