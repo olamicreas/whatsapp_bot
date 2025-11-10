@@ -27,6 +27,30 @@
     </div>
   </div>
 
+  <!-- Countdown -->
+  <div class="p-3 rounded-xl bg-indigo-50 border border-indigo-100 text-center">
+    <div class="text-xs text-indigo-600">Referral contest ends in</div>
+    <div id="countdown" class="mt-2 flex items-center justify-center gap-3 text-sm">
+      <div class="text-center">
+        <div id="cd-days" class="text-2xl font-extrabold text-indigo-700">0</div>
+        <div class="text-xs text-indigo-600">Days</div>
+      </div>
+      <div class="text-center">
+        <div id="cd-hours" class="text-2xl font-extrabold text-indigo-700">00</div>
+        <div class="text-xs text-indigo-600">Hours</div>
+      </div>
+      <div class="text-center">
+        <div id="cd-mins" class="text-2xl font-extrabold text-indigo-700">00</div>
+        <div class="text-xs text-indigo-600">Mins</div>
+      </div>
+      <div class="text-center">
+        <div id="cd-secs" class="text-2xl font-extrabold text-indigo-700">00</div>
+        <div class="text-xs text-indigo-600">Secs</div>
+      </div>
+    </div>
+    <div id="countdown-ended" class="hidden mt-2 text-sm text-red-600 font-semibold">Contest ended</div>
+  </div>
+
   <!-- Big referrals stat -->
   <div class="p-4 rounded-2xl bg-gradient-to-r from-purple-50 to-pink-50">
     <div class="text-xs text-gray-500">
@@ -79,11 +103,7 @@
     {% endif %}
   </div>
 
-  
-
-
-  
-  </div>
+  <!-- Team breakdown removed as requested -->
 
   {% endif %}
 
@@ -94,7 +114,7 @@
       Home
     </a>
 
-
+    <a href="/public" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm">Leaderboard</a>
   </div>
 </div>
 
@@ -114,6 +134,51 @@
       }
     });
   }
+
+  // Countdown logic
+  (function(){
+    const endIso = "{{ contest_end_iso }}";
+    if(!endIso) return;
+
+    const endTime = new Date(endIso).getTime();
+
+    const elDays = document.getElementById('cd-days');
+    const elHours = document.getElementById('cd-hours');
+    const elMins = document.getElementById('cd-mins');
+    const elSecs = document.getElementById('cd-secs');
+    const endedEl = document.getElementById('countdown-ended');
+    const countdownEl = document.getElementById('countdown');
+
+    function pad(n){ return String(n).padStart(2,'0'); }
+
+    function update(){
+      const now = new Date().getTime();
+      let diff = endTime - now;
+
+      if(diff <= 0){
+        // ended
+        if(endedEl) endedEl.classList.remove('hidden');
+        if(countdownEl) countdownEl.classList.add('hidden');
+        return;
+      }
+
+      const days = Math.floor(diff / (1000*60*60*24));
+      diff -= days * (1000*60*60*24);
+      const hours = Math.floor(diff / (1000*60*60));
+      diff -= hours * (1000*60*60);
+      const mins = Math.floor(diff / (1000*60));
+      diff -= mins * (1000*60);
+      const secs = Math.floor(diff / 1000);
+
+      if(elDays) elDays.textContent = days;
+      if(elHours) elHours.textContent = pad(hours);
+      if(elMins) elMins.textContent = pad(mins);
+      if(elSecs) elSecs.textContent = pad(secs);
+    }
+
+    update();
+    setInterval(update, 1000);
+  })();
 </script>
 
 {% endblock %}
