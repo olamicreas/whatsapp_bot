@@ -79,30 +79,9 @@
     {% endif %}
   </div>
 
-  <!-- Group teams mini leaderboard (h-scroll on mobile) -->
-  <div>
-    <div class="mb-2 flex items-center justify-between">
-      <h3 class="text-sm font-semibold">Team breakdown</h3>
-      <a href="/public" class="text-xs text-indigo-600">View full leaderboard</a>
-    </div>
+  
 
-    {% if group_teams and group_teams|length %}
-      <div class="flex gap-3 overflow-x-auto pb-2">
-        {% for tid, info in group_teams.items() %}
-        <div class="min-w-[140px] p-3 rounded-2xl bg-gray-50 border border-gray-100">
-          <div class="text-xs text-gray-400">{{ info.team_label }}</div>
-          <div class="font-bold text-purple-700 text-xl">{{ info.referrals }}</div>
-          <div class="mt-2 text-xs">
-            {% set team_link = TEAM_LINKS.get((tid|int)) %}
-            {% if team_link %}
-              <a href="{{ team_link }}" target="_blank" class="text-indigo-600">Open link</a>
-            {% else %}
-              <span class="text-gray-400">No link</span>
-            {% endif %}
-          </div>
-        </div>
-        {% endfor %}
-      </div>
+
     {% else %}
       <div class="text-xs text-gray-500">No data yet — run sync.</div>
     {% endif %}
@@ -117,7 +96,7 @@
       Home
     </a>
 
-    <a href="/public" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm">Leaderboard</a>
+
   </div>
 </div>
 
