@@ -477,7 +477,7 @@ def register():
 
 @app.route("/progress/<ref_id>", methods=["GET", "POST"])
 def progress(ref_id):
-    # quick sync (optional)
+    # optional quick sync
     try:
         fetch_contacts_and_update()
     except Exception as e:
@@ -491,31 +491,63 @@ def progress(ref_id):
 
     referrals = load_json(REF_FILE, {})
 
-    # determine registration type (explicit field first; fallback to label)
+    # determine registration type (explicit then fallback to team_label prefix)
     reg_type = (user.get("registration_type") or "").strip().lower()
     if not reg_type:
         tl = (user.get("team_label") or "").upper()
         reg_type = "solo" if tl.startswith("REF") else "team"
 
-    # prepare group/team data for leaderboard
+    # group/team data used for leaderboard
     group_key = (user.get("group") or "").strip() or "ALL"
     raw_group_data = referrals.get(group_key, referrals.get("ALL", {}))
     group_data = {str(k): v for k, v in raw_group_data.items()}
 
-    # SOLO user: read only from referrals["SOLO"]
+    # ----- SOLO path (robust multi-key lookup) -----
     if reg_type == "solo":
         solo_map = referrals.get("SOLO", {}) or {}
-        solo_key = user.get("ref_id")
-        team_info = solo_map.get(solo_key)
 
-        # If there is no SOLO entry, show a safe default (0) — DO NOT fallback to ALL
+        # candidate keys in order of priority
+        solo_key_refid = user.get("ref_id")                    # e.g. "sultan"
+        solo_key_label = (user.get("team_label") or "").strip() # e.g. "REF001"
+        assigned_number = user.get("assigned_number")
+
+        candidates = []
+        if solo_key_label:
+            candidates.append(solo_key_label)
+        if solo_key_refid:
+            candidates.append(solo_key_refid)
+        if assigned_number is not None:
+            try:
+                candidates.append(f"REF{int(assigned_number):03d}")
+            except Exception:
+                pass
+
+        # try candidates (exact + uppercase)
+        team_info = None
+        found_key = None
+        for c in candidates:
+            if not c:
+                continue
+            # exact match
+            if c in solo_map:
+                team_info = solo_map[c]; found_key = c; break
+            # upper-case match (covers "ref001" vs "REF001")
+            cu = str(c).upper()
+            if cu in solo_map:
+                team_info = solo_map[cu]; found_key = cu; break
+            # lower-case match (in case keys are lowercased)
+            cl = str(c).lower()
+            if cl in solo_map:
+                team_info = solo_map[cl]; found_key = cl; break
+
+        # if not found, don't fallback to team ALL — show safe default (0)
         if not team_info:
             team_info = {
                 "team_label": user.get("team_label", f"REF{int(user.get('assigned_number', 1)):03d}"),
                 "referrals": 0
             }
 
-        # force integer conversions
+        # ensure integer referrals
         try:
             team_info["referrals"] = int(team_info.get("referrals", 0))
         except Exception:
@@ -523,7 +555,7 @@ def progress(ref_id):
 
         referral_goal = 1000
 
-    # TEAM user: normal ALL lookup
+    # ----- TEAM path -----
     else:
         team_number = user.get("team_number") if user.get("team_number") is not None else user.get("assigned_number")
         try:
@@ -538,7 +570,7 @@ def progress(ref_id):
             team_info["referrals"] = 0
         referral_goal = 10000
 
-    # prepare mini leaderboard (teams only)
+    # build leaderboard from group_data (teams)
     try:
         normalized_group_teams = {
             str(k): {"team_label": v.get("team_label"), "referrals": int(v.get("referrals", 0))}
@@ -553,6 +585,9 @@ def progress(ref_id):
         )
     except Exception:
         group_teams = group_data
+
+    # DEBUG OPTION (uncomment to log what was chosen)
+    # print("DEBUG progress:", {"ref_id": ref_id, "reg_type": reg_type, "found_solo_key": found_key if reg_type=='solo' else None, "team_info": team_info})
 
     return render_template(
         "progress.html",
