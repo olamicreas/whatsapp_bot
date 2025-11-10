@@ -1,9 +1,30 @@
 {
-    "ALL": {},
+    "ALL": {
+        "1": {
+            "team_label": "TEAM1",
+            "referrals": 1
+        }
+    },
     "SOLO": {
-        "geez": {
+        "REF001": {
             "team_label": "REF001",
+            "referrals": 27
+        },
+        "REF002": {
+            "team_label": "REF002",
             "referrals": 0
+        },
+        "REF003": {
+            "team_label": "REF003",
+            "referrals": 0
+        },
+        "REF004": {
+            "team_label": "REF004",
+            "referrals": 0
+        },
+        "REF005": {
+            "team_label": "REF005",
+            "referrals": 2
         }
     }
 }
