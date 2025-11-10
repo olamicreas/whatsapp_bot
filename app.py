@@ -879,21 +879,48 @@ def daily_progress():
         latest_index=latest_index
     )
 
-@app.route("/daily-progress/snapshot", methods=["POST"])
+@app.route("/daily-progress/snapshot", methods=["GET", "POST"])
 def daily_progress_snapshot():
     """
     Admin-protected endpoint to append today's snapshot.
-    Accepts form field 'admin_password' or header 'X-Admin-Password'.
+    Accepts:
+      - POST form field 'admin_password'
+      - X-Admin-Password header
+      - GET query param 'admin_password' or 'key' (useful for curl or quick browser calls)
+    GET without a password returns a simple HTML form explaining how to call the endpoint.
     """
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "ContactBatch321!")
-    pw = request.form.get("admin_password") or request.headers.get("X-Admin-Password", "")
+
+    # Accept password from form (POST), header, or query (GET)
+    pw = ""
+    if request.method == "POST":
+        pw = request.form.get("admin_password") or request.headers.get("X-Admin-Password", "")
+    else:
+        # GET
+        pw = request.args.get("admin_password") or request.args.get("key") or request.headers.get("X-Admin-Password", "")
+
+    # If no password provided on GET, show a helpful HTML explanation (so clicking link won't give 405)
+    if not pw and request.method == "GET":
+        return (
+            "<h3>Daily snapshot endpoint</h3>"
+            "<p>This endpoint records today's referral snapshot (admin only).</p>"
+            "<p>To run it, POST to this URL with the admin password, or call:</p>"
+            "<pre>curl -X POST -d \"admin_password=YOUR_PASSWORD\" https://your-app/daily-progress/snapshot</pre>"
+            "<p>Or supply as a query parameter (less secure):</p>"
+            "<pre>https://your-app/daily-progress/snapshot?admin_password=YOUR_PASSWORD</pre>",
+            200,
+            {"Content-Type": "text/html"}
+        )
+
     if pw != ADMIN_PASSWORD:
         return jsonify({"ok": False, "reason": "forbidden"}), 403
 
+    # Perform snapshot
     snapshot = build_today_snapshot()
     ok, reason = append_daily_snapshot(snapshot)
-    return jsonify({"ok": ok, "reason": reason, "date": snapshot["date"]})
 
+    # Return JSON for programmatic calls
+    return jsonify({"ok": ok, "reason": reason, "date": snapshot["date"]})
 # ---------------------- End new daily routes ----------------------
 
 if __name__ == "__main__":
