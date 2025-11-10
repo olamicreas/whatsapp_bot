@@ -36,18 +36,40 @@ GITHUB_REPO = os.getenv("GITHUB_REPO", "olamicreas/whatsapp_bot")  # owner/repo
 GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "master")    # branch to commit to
 
 # ---------------------- Team links (WhatsApp) ----------------------
+# ---------------------- WhatsApp referral links ----------------------
 TEAM_LINKS = {
-    1: "https://wa.link/lrg1il",
-    2: "https://wa.link/1trxu8",
-    3: "https://wa.link/x1z2ey",
-    4: "https://wa.link/rdg24q",
-    5: "https://wa.link/6sgqe8",
-    6: "https://wa.link/hf0q2j",
-    7: "https://wa.link/4mormj",
-    8: "https://wa.link/6b6k23",
-    9: "https://wa.link/h0xegq",
-    10: "https://wa.link/943a6n"
+    1: "https://wa.link/0a7pj3",
+    2: "https://wa.link/uiv1az",
+    3: "https://wa.link/i7rwku",
+    4: "https://wa.link/47ly4h",
+    5: "https://wa.link/xfq5gn"
 }
+
+SOLO_LINKS = {
+    1: "https://wa.link/b6kecz",  # Ref 001
+    2: "https://wa.link/stv0mr",  # Ref 002
+    3: "https://wa.link/yup4kc",  # Ref 003 / Mr Heep
+    4: "https://wa.link/ze4vj4",  # Ref 004
+    5: "https://wa.link/109mvf"   # Ref 005
+}
+
+TEAMS_PER_GROUP = 5
+SOLO_COUNT = 5
+
+# ---------------------- Assign links ----------------------
+def assign_link(reg_type):
+    if reg_type == "team":
+        users = [u for u in load_json(DATA_FILE, []) if u.get("registration_type") == "team"]
+        team_number = (len(users) % TEAMS_PER_GROUP) + 1
+        link = TEAM_LINKS[team_number]
+        return team_number, link
+    elif reg_type == "solo":
+        users = [u for u in load_json(DATA_FILE, []) if u.get("registration_type") == "solo"]
+        solo_number = (len(users) % SOLO_COUNT) + 1
+        link = SOLO_LINKS[solo_number]
+        return solo_number, link
+    else:
+        return 1, None
 
 # ---------------------- Helpers ----------------------
 def load_json(path, default):
