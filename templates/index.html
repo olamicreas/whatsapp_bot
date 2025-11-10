@@ -21,12 +21,11 @@
 
   <!-- Registration Card -->
   <div class="rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
-    <div class="p-4 bg-gradient-to-r from-slate-700 via-slate-600 to-slate-500
- text-white">
+    <div class="p-4 bg-gradient-to-r from-slate-700 via-slate-600 to-slate-500 text-white">
       <div class="flex items-center justify-between">
         <div>
           <h2 class="text-lg font-bold">Join the Challenge</h2>
-          <p class="text-xs opacity-90">Get a team link & start referring</p>
+          <p class="text-xs opacity-90">Choose team (group) or solo (individual) and get your referral link</p>
         </div>
         <div class="text-right text-xs">
           <span class="block opacity-80">Teams</span>
@@ -35,18 +34,51 @@
       </div>
     </div>
 
-    <form method="POST" action="/register" class="p-4 bg-white">
-      <label class="block text-xs text-gray-500 mb-1">Your Name</label>
-      <input name="name" required
-             class="w-full p-3 rounded-xl border border-gray-200 mb-3 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-             placeholder="e.g. Abdul Oyedotun" />
+    <form id="registerForm" method="POST" action="/register" class="p-4 bg-white space-y-4">
+      <!-- Registration type toggle -->
+      <div class="flex items-center gap-2 rounded-xl bg-gray-50 p-2">
+        <button type="button" id="btnTeam" class="flex-1 py-2 rounded-lg font-semibold text-sm bg-indigo-600 text-white">Team (Group)</button>
+        <button type="button" id="btnSolo" class="flex-1 py-2 rounded-lg font-semibold text-sm bg-white text-gray-700 border border-gray-200">Solo (Individual)</button>
+      </div>
 
+      <input type="hidden" name="registration_type" id="registration_type" value="team">
 
+      <!-- Name -->
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Your Name</label>
+        <input name="name" required
+               id="nameInput"
+               class="w-full p-3 rounded-xl border border-gray-200 mb-1 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+               placeholder="e.g. Abdul Oyedotun" />
+      </div>
 
-      <button class="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 bg-gradient-to-r from-slate-700 via-slate-600 to-slate-500
- text-white font-bold shadow-md hover:opacity-95 transition">
-        Create Account
-      </button>
+      <!-- Group (shown for Team) -->
+      <div id="groupBlock">
+        <label class="block text-xs text-gray-500 mb-1">Group / Organization (optional)</label>
+        <input name="group" id="groupInput" placeholder="e.g. HIP TV"
+               class="w-full p-3 rounded-xl border border-gray-200 mb-1 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+        <p class="text-xs text-gray-400">If you choose Team, this groups users for a team leaderboard.</p>
+      </div>
+
+      <!-- Solo nickname (shown for Solo) -->
+      <div id="soloBlock" class="hidden">
+        <label class="block text-xs text-gray-500 mb-1">Solo display / ref label (optional)</label>
+        <input name="solo_handle" id="soloInput" placeholder="e.g. AbdulQ or Ref 001"
+               class="w-full p-3 rounded-xl border border-gray-200 mb-1 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+        <p class="text-xs text-gray-400">Used for your individual referral identity (if any).</p>
+      </div>
+
+      <!-- Submit -->
+      <div>
+        <button type="submit"
+                id="createBtn"
+                class="w-full py-3 rounded-xl bg-gradient-to-r from-slate-700 via-slate-600 to-slate-500 text-white font-bold shadow-md hover:opacity-95 transition">
+          Create Account
+        </button>
+      </div>
+
+      <!-- Optional small note -->
+      <p class="text-xs text-gray-400 text-center">By registering you accept the rules. Share your assigned link to get referrals.</p>
     </form>
   </div>
 
@@ -54,14 +86,14 @@
   <div class="rounded-2xl bg-gray-50 border border-gray-100 p-3 shadow-sm">
     <label class="block text-xs text-gray-500 mb-2">Already registered?</label>
     <form onsubmit="redirectToProgress(event)" class="flex gap-2">
-      <input id="groupInput" required placeholder="Enter your name"
+      <input id="lookupInput" required placeholder="Enter the name you registered with"
              class="flex-1 p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-400" />
       <button type="submit"
               class="px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-500 text-white font-semibold hover:opacity-95 transition">
         View
       </button>
     </form>
-    <p class="text-xs text-gray-400 mt-2">Tip: enter the exact name you registered with.</p>
+    <p class="text-xs text-gray-400 mt-2">Tip: use the exact name you registered with (case-insensitive).</p>
   </div>
 
   <!-- Footer -->
@@ -71,10 +103,58 @@
 </div>
 
 <script>
-function redirectToProgress(e){
-  e.preventDefault();
-  const name = document.getElementById('groupInput').value.trim().toLowerCase().replace(/\s+/g,'_');
-  if(name) window.location.href = `/progress/${name}`;
-}
+  // Toggle registration type (team / solo)
+  const btnTeam = document.getElementById('btnTeam');
+  const btnSolo = document.getElementById('btnSolo');
+  const groupBlock = document.getElementById('groupBlock');
+  const soloBlock = document.getElementById('soloBlock');
+  const registrationType = document.getElementById('registration_type');
+
+  function setMode(mode) {
+    if(mode === 'team') {
+      registrationType.value = 'team';
+      btnTeam.classList.add('bg-indigo-600', 'text-white');
+      btnTeam.classList.remove('bg-white','text-gray-700','border');
+      btnSolo.classList.remove('bg-indigo-600','text-white');
+      btnSolo.classList.add('bg-white','text-gray-700','border','border-gray-200');
+      groupBlock.classList.remove('hidden');
+      soloBlock.classList.add('hidden');
+      document.getElementById('createBtn').textContent = 'Create Team Account';
+    } else {
+      registrationType.value = 'solo';
+      btnSolo.classList.add('bg-indigo-600', 'text-white');
+      btnSolo.classList.remove('bg-white','text-gray-700','border');
+      btnTeam.classList.remove('bg-indigo-600','text-white');
+      btnTeam.classList.add('bg-white','text-gray-700','border','border-gray-200');
+      groupBlock.classList.add('hidden');
+      soloBlock.classList.remove('hidden');
+      document.getElementById('createBtn').textContent = 'Create Solo Account';
+    }
+  }
+
+  // Init default
+  setMode('team');
+
+  btnTeam.addEventListener('click', () => setMode('team'));
+  btnSolo.addEventListener('click', () => setMode('solo'));
+
+  // Quick lookup redirect
+  function redirectToProgress(e){
+    e.preventDefault();
+    const name = document.getElementById('lookupInput').value.trim().toLowerCase().replace(/\s+/g,'_');
+    if(name) window.location.href = `/progress/${name}`;
+  }
+
+  // On submit, ensure we don't send empty group when team selected (optional)
+  document.getElementById('registerForm').addEventListener('submit', (e) => {
+    const mode = registrationType.value;
+    const name = document.getElementById('nameInput').value.trim();
+    if(!name){
+      e.preventDefault();
+      alert('Please enter your name.');
+      return;
+    }
+    // You may want to add other client-side validations here.
+  });
 </script>
 {% endblock %}
