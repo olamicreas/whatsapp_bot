@@ -6,7 +6,7 @@ import time
 import re
 import base64
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -19,7 +19,7 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "super_secret_key")
 # ---------------------- Config ----------------------
 DATA_FILE = "data.json"
 REF_FILE = "referrals.json"
-DAILY_FILE = os.getenv("DAILY_FILE", "daily_refs.json")  # new: daily snapshots storage
+DAILY_FILE = os.getenv("DAILY_FILE", "daily_refs.json")  # daily snapshots storage
 
 # prefer Render secret file path if present, else local credentials.json
 CRED_FILE = "/etc/secrets/credentials.json" if os.path.exists("/etc/secrets/credentials.json") else "credentials.json"
@@ -57,6 +57,21 @@ SOLO_LINKS = {
 TEAMS_PER_GROUP = 5
 SOLO_COUNT = 5
 
+# ---------------------- Utility helpers ----------------------
+def safe_int(x, default=0):
+    try:
+        # treat bool as invalid for counting
+        if isinstance(x, bool):
+            return default
+        if x is None:
+            return default
+        return int(x)
+    except Exception:
+        try:
+            return int(str(x).strip() or 0)
+        except Exception:
+            return default
+
 # ---------------------- GitHub helpers ----------------------
 def _github_api_headers():
     if not GITHUB_TOKEN:
@@ -69,7 +84,8 @@ def _github_api_headers():
 
 def _github_get_file_content(repo, path, branch=None):
     """
-    Try to fetch file content from GitHub. Tries branch, then 'main', then 'master' (defensive).
+    Fetch file content bytes from GitHub. Tries branch (if provided),
+    then configured GITHUB_BRANCH, then 'main', then 'master'.
     Returns decoded bytes or None on failure.
     """
     headers = _github_api_headers()
@@ -79,8 +95,11 @@ def _github_get_file_content(repo, path, branch=None):
     branches_to_try = []
     if branch:
         branches_to_try.append(branch)
-    # try user branch, then sensible defaults
-    for b in [BRANCH for BRANCH in branches_to_try] + ["main", "master"]:
+    if GITHUB_BRANCH:
+        branches_to_try.append(GITHUB_BRANCH)
+    branches_to_try.extend(["main", "master"])
+
+    for b in branches_to_try:
         try:
             url = f"https://api.github.com/repos/{repo}/contents/{path}?ref={b}"
             r = requests.get(url, headers=headers, timeout=15)
@@ -88,8 +107,10 @@ def _github_get_file_content(repo, path, branch=None):
                 data = r.json()
                 content_b64 = data.get("content", "")
                 if content_b64:
-                    return base64.b64decode(content_b64)
-            # 404 or other -> try next branch
+                    # GH API returns content with newlines; base64 decode robustly
+                    payload = "".join(content_b64.splitlines())
+                    return base64.b64decode(payload)
+            # try next branch if 404 or other
         except Exception as e:
             app.logger.debug(f"[GITHUB] fetch {path}@{b} failed: {e}")
             continue
@@ -107,7 +128,7 @@ def _github_get_file_sha(repo, path, branch="master"):
             return data.get("sha")
         return None
     except Exception as e:
-        print(f"[GITHUB] GET file failed: {e}")
+        app.logger.debug(f"[GITHUB] GET file sha failed: {e}")
         return None
 
 def _github_put_file(repo, path, content_bytes, message, branch="master", sha=None):
@@ -130,34 +151,34 @@ def _github_put_file(repo, path, content_bytes, message, branch="master", sha=No
 
 def push_file_to_github(path, commit_message=None):
     if not GITHUB_TOKEN or not GITHUB_REPO:
-        print("[GITHUB] Skipping push: GITHUB_TOKEN or GITHUB_REPO not set.")
+        app.logger.info("[GITHUB] Skipping push: GITHUB_TOKEN or GITHUB_REPO not set.")
         return {"skipped": True}
 
     if not os.path.exists(path):
-        print(f"[GITHUB] Local file {path} not found, skipping push.")
+        app.logger.info(f"[GITHUB] Local file {path} not found, skipping push.")
         return {"skipped": True}
 
     try:
         with open(path, "rb") as f:
             content = f.read()
     except Exception as e:
-        print(f"[GITHUB] Failed to read {path}: {e}")
+        app.logger.warning(f"[GITHUB] Failed to read {path}: {e}")
         return {"error": str(e)}
 
     repo = GITHUB_REPO
-    branch = GITHUB_BRANCH
+    branch = GITHUB_BRANCH or "master"
     commit_message = commit_message or f"Auto-update {os.path.basename(path)}"
 
     try:
         sha = _github_get_file_sha(repo, path, branch=branch)
         result = _github_put_file(repo, path, content, commit_message, branch=branch, sha=sha)
-        print(f"[GITHUB] Pushed {path} to {repo}@{branch} (sha: {result.get('content',{}).get('sha')})")
+        app.logger.info(f"[GITHUB] Pushed {path} to {repo}@{branch}")
         return {"ok": True, "response": result}
     except Exception as e:
-        print(f"[GITHUB] Push failed for {path}: {e}")
+        app.logger.warning(f"[GITHUB] Push failed for {path}: {e}")
         return {"error": str(e)}
 
-# ---------------------- Helpers ----------------------
+# ---------------------- Local / GitHub JSON helpers ----------------------
 def load_json(path, default):
     """
     Try to fetch file from GitHub (if configured). If that fails, use local file.
@@ -178,8 +199,11 @@ def load_json(path, default):
 
     # Fallback to local file (create if not exists)
     if not os.path.exists(path):
-        with open(path, "w") as f:
-            json.dump(default, f)
+        try:
+            with open(path, "w") as f:
+                json.dump(default, f)
+        except Exception:
+            pass
         return default
 
     with open(path, "r") as f:
@@ -191,23 +215,25 @@ def load_json(path, default):
 def save_json(path, data, push_to_github=True):
     """
     Save JSON locally and optionally push to GitHub.
+    Supports DATA_FILE, REF_FILE and DAILY_FILE when push_to_github=True.
     """
     try:
         with open(path, "w") as f:
             json.dump(data, f, indent=4)
     except Exception as e:
-        print(f"[ERROR] Failed writing {path}: {e}")
+        app.logger.error(f"[ERROR] Failed writing {path}: {e}")
         raise
 
-    if push_to_github and path in (DATA_FILE, REF_FILE) and GITHUB_TOKEN and GITHUB_REPO:
+    if push_to_github and GITHUB_TOKEN and GITHUB_REPO and path in (DATA_FILE, REF_FILE, DAILY_FILE):
         try:
             res = push_file_to_github(path, commit_message=f"Auto-update {path}")
             return res
         except Exception as e:
-            print(f"[WARN] GitHub push failed for {path}: {e}")
+            app.logger.warning(f"[WARN] GitHub push failed for {path}: {e}")
             return {"error": str(e)}
     return {"saved_local": True}
 
+# ---------------------- Google credentials ----------------------
 def get_credentials():
     if os.path.exists(TOKEN_FILE):
         creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
@@ -221,21 +247,21 @@ def get_credentials():
     return None
 
 def normalize_ref_id(s):
-    return re.sub(r"\s+", "_", s.strip().lower())
+    return re.sub(r"\s+", "_", (s or "").strip().lower())
 
 # ---------------------- Team & Registration logic ----------------------
 def assign_team_global():
     users = load_json(DATA_FILE, [])
-    team_number = (len(users) % TEAMS_PER_GROUP) + 1
+    team_number = (len([u for u in users if (u.get("registration_type") or "").strip().lower() == "team"]) % TEAMS_PER_GROUP) + 1
     return team_number
 
 def assign_link(reg_type):
     if reg_type == "team":
-        users = [u for u in load_json(DATA_FILE, []) if u.get("registration_type") == "team"]
+        users = [u for u in load_json(DATA_FILE, []) if (u.get("registration_type") or "").strip().lower() == "team"]
         team_number = (len(users) % TEAMS_PER_GROUP) + 1
         return team_number, TEAM_LINKS.get(team_number)
     elif reg_type == "solo":
-        users = [u for u in load_json(DATA_FILE, []) if u.get("registration_type") == "solo"]
+        users = [u for u in load_json(DATA_FILE, []) if (u.get("registration_type") or "").strip().lower() == "solo"]
         solo_number = (len(users) % SOLO_COUNT) + 1
         return solo_number, SOLO_LINKS.get(solo_number)
     else:
@@ -244,7 +270,7 @@ def assign_link(reg_type):
 def team_label(group_name, team_number):
     return f"TEAM{int(team_number)}"
 
-# ---------------------- Google matching logic ----------------------
+# ---------------------- Contact matching helpers ----------------------
 def contact_mentions_team(contact, group_name, team_number):
     token_pattern = re.compile(r"\bteam[\s_\-]*0*{}\b".format(int(team_number)), flags=re.I)
     texts = []
@@ -271,7 +297,6 @@ def contact_mentions_team(contact, group_name, team_number):
                     texts.append(f"{ud.get('key')} {ud.get('value')}")
             else:
                 texts.append(str(ud))
-
     combined = " ".join([t for t in texts if t]).lower()
     if token_pattern.search(combined):
         return True
@@ -285,10 +310,6 @@ def contact_mentions_team(contact, group_name, team_number):
     return False
 
 def contact_mentions_ref(contact, ref_index):
-    """
-    Look for REF001..REFNNN markers in text values.
-    Accepts patterns like REF001, REF 001, ref001, ref-001
-    """
     pat = re.compile(r"\bref[\s\-_]*0*{}\b".format(int(ref_index)), flags=re.I)
     texts = []
     for field in ["names", "biographies", "organizations", "userDefined"]:
@@ -301,14 +322,14 @@ def contact_mentions_ref(contact, ref_index):
                 else:
                     texts.append(str(item))
     combined = " ".join(t for t in texts if t)
-    combined_clean = re.sub(r"[^\w\s]", " ", combined)  # remove punctuation to be lenient
+    combined_clean = re.sub(r"[^\w\s]", " ", combined)
     return bool(pat.search(combined_clean))
 
 # ---------------------- Sync & aggregation ----------------------
 def fetch_contacts_and_update():
     creds = get_credentials()
     if not creds:
-        print("[INFO] No credentials yet. Visit /auth to connect Google Contacts.")
+        app.logger.info("[INFO] No credentials yet. Visit /auth to connect Google Contacts.")
         return {"status": "no-credentials"}
 
     try:
@@ -319,14 +340,18 @@ def fetch_contacts_and_update():
             pageSize=2000
         ).execute()
 
-        connections = results.get("connections", [])
-        users = load_json(DATA_FILE, [])
+        connections = results.get("connections", []) or []
+        users = load_json(DATA_FILE, []) or []
 
-        # Prepare groups -> teams structure from registered users
+        # Prepare groups -> teams structure from registered users (only TEAM registrations)
         groups = {}
         for u in users:
+            regt = (u.get("registration_type") or "").strip().lower()
+            if regt != "team":
+                continue  # skip solo users for team counts
             group = (u.get("group") or "ALL").strip()
-            team_num = int(u.get("team_number") or u.get("assigned_number") or 1)
+            # prefer explicit team_number, fallback to assigned_number, else 1
+            team_num = safe_int(u.get("team_number") or u.get("assigned_number") or 1)
             groups.setdefault(group, {})
             groups[group].setdefault(team_num, {"team_label": f"TEAM{team_num}", "count": 0})
 
@@ -355,29 +380,29 @@ def fetch_contacts_and_update():
             for group, teams in groups.items():
                 for team_num in list(teams.keys()):
                     if contact_mentions_team(contact, group, team_num) or contact_mentions_team_local(contact, team_num):
-                        teams[team_num]["count"] = int(teams[team_num].get("count") or 0) + 1
+                        teams[team_num]["count"] = safe_int(teams[team_num].get("count")) + 1
                         try:
                             name = contact.get("names", [{"displayName": "Unknown"}])[0].get("displayName", "Unknown")
                         except Exception:
                             name = "Unknown"
-                        print(f"[MATCH] {name} counted for {group} TEAM{team_num}")
+                        app.logger.debug(f"[MATCH] {name} counted for {group} TEAM{team_num}")
 
-            # SOLO refs
+            # SOLO refs: REF001..REFNN
             for i in range(1, SOLO_MAX + 1):
                 if contact_mentions_ref(contact, i):
-                    solo_refs[i]["count"] = int(solo_refs[i].get("count") or 0) + 1
+                    solo_refs[i]["count"] = safe_int(solo_refs[i].get("count")) + 1
                     try:
                         name = contact.get("names", [{"displayName": "Unknown"}])[0].get("displayName", "Unknown")
                     except Exception:
                         name = "Unknown"
-                    print(f"[MATCH] {name} counted for SOLO {solo_refs[i]['ref_label']}")
+                    app.logger.debug(f"[MATCH] {name} counted for SOLO {solo_refs[i]['ref_label']}")
 
         # Build referrals dict
         referrals = {}
         for group, teams in groups.items():
             referrals[group] = {}
             for team_num, info in teams.items():
-                count = int(info.get("count") or 0)
+                count = safe_int(info.get("count"))
                 referrals[group][str(team_num)] = {
                     "team_label": info.get("team_label", f"TEAM{team_num}"),
                     "referrals": count
@@ -386,7 +411,7 @@ def fetch_contacts_and_update():
         # Add SOLO group
         referrals.setdefault("SOLO", {})
         for i, info in solo_refs.items():
-            count = int(info.get("count") or 0)
+            count = safe_int(info.get("count"))
             key = f"REF{str(i).zfill(3)}"
             referrals["SOLO"][key] = {
                 "team_label": info.get("ref_label", key),
@@ -395,53 +420,67 @@ def fetch_contacts_and_update():
 
         # Save locally and push to GitHub if configured
         save_json(REF_FILE, referrals, push_to_github=True)
-        print("[AUTO-UPDATE] Referral counts per group/team and SOLO synced from Google Contacts.")
+        app.logger.info("[AUTO-UPDATE] Referral counts per group/team and SOLO synced from Google Contacts.")
         return {"status": "ok", "groups": len(referrals)}
 
     except Exception as e:
-        print(f"[ERROR] Failed to update referrals: {e}")
+        app.logger.error(f"[ERROR] Failed to update referrals: {e}")
         return {"status": "error", "message": str(e)}
-        
+
 def background_updater():
     while True:
         fetch_contacts_and_update()
         time.sleep(UPDATE_INTERVAL)
 
-# ---------------------- New: Daily snapshots helpers & routes ----------------------
+# ---------------------- Daily snapshot helpers & routes ----------------------
 def build_today_snapshot():
     """
-    Reads REF_FILE and converts into a simple mapping label->count for today.
-    Labels:
-      - Team entries under "ALL" -> keys become "TEAM{n}"
-      - Solo entries under "SOLO" keep their keys (e.g. "REF001")
-    Returns {"date": "YYYY-MM-DD", "counts": {label: int, ...}}
+    Read REF_FILE and produce {'date': 'YYYY-MM-DD', 'counts': {label: count}}
     """
     refs = load_json(REF_FILE, {})
     counts = {}
 
-    # Teams: ALL (may be grouped under different group keys; pick top-level ALL)
-    all_map = refs.get("ALL", {}) if isinstance(refs, dict) else {}
-    for k, v in all_map.items():
-        try:
-            c = int(v.get("referrals", 0))
-        except Exception:
-            c = 0
-        try:
-            label = f"TEAM{int(k)}"
-        except Exception:
-            label = f"TEAM{str(k)}"
-        counts[label] = c
+    # Teams: prefer 'ALL' group if present, else aggregate across groups
+    if isinstance(refs, dict):
+        if "ALL" in refs and isinstance(refs["ALL"], dict):
+            source = refs["ALL"]
+            for k, v in source.items():
+                c = safe_int((v or {}).get("referrals"))
+                try:
+                    label = f"TEAM{int(k)}"
+                except Exception:
+                    label = str((v or {}).get("team_label") or f"TEAM{str(k)}")
+                counts[label] = c
+        else:
+            # aggregate teams from any group keys
+            for g, teams in refs.items():
+                if g == "SOLO" or not isinstance(teams, dict):
+                    continue
+                for k, v in teams.items():
+                    c = safe_int((v or {}).get("referrals"))
+                    try:
+                        label = f"TEAM{int(k)}"
+                    except Exception:
+                        label = str((v or {}).get("team_label") or f"TEAM{str(k)}")
+                    counts[label] = counts.get(label, 0) + c
 
-    # Solos
-    solo_map = refs.get("SOLO", {}) or {}
-    for k, v in solo_map.items():
-        try:
-            c = int(v.get("referrals", 0))
-        except Exception:
-            c = 0
-        counts[str(k)] = c  # keep key as-is (REF001 etc)
+        # Solos
+        solo = refs.get("SOLO", {}) or {}
+        for k, v in solo.items():
+            c = safe_int((v or {}).get("referrals"))
+            label = str((v or {}).get("team_label") or k)
+            counts[label] = counts.get(label, 0) + c
 
-    return {"date": datetime.utcnow().date().isoformat(), "counts": counts}
+    # Ensure teams known in DATA_FILE are present with zero if missing
+    users = load_json(DATA_FILE, []) or []
+    if isinstance(users, list):
+        for u in users:
+            tl = (u.get("team_label") or "").strip()
+            if tl:
+                counts.setdefault(tl, 0)
+
+    date_str = datetime.utcnow().date().isoformat()
+    return {"date": date_str, "counts": counts}
 
 def read_daily_file():
     return load_json(DAILY_FILE, {"days": []})
@@ -449,45 +488,47 @@ def read_daily_file():
 def append_daily_snapshot(snapshot):
     """
     Append today's snapshot only if not already present for today's date.
-    Keep at most 30 entries (oldest removed).
+    Keep at most 90 entries.
     Returns (ok: bool, reason: str)
     """
+    if not isinstance(snapshot, dict) or "date" not in snapshot or "counts" not in snapshot:
+        return False, "invalid-snapshot"
+
     data = read_daily_file()
     days = data.get("days", [])
 
-    today = snapshot["date"]
-    if days and days[-1].get("date") == today:
-        # already recorded today
-        return False, "already_exists"
+    # avoid duplicates
+    if any(d.get("date") == snapshot["date"] for d in days):
+        return False, "duplicate-date"
 
     days.append(snapshot)
-    # keep only last 30 days
-    if len(days) > 30:
-        days = days[-30:]
+    # cap at 90
+    if len(days) > 90:
+        days = days[-90:]
     data["days"] = days
-    # Use save_json but avoid pushing DAILY_FILE to GitHub by setting push_to_github False
-    save_json(DAILY_FILE, data, push_to_github=False)
-    return True, "saved"
+
+    # save and push to GitHub (we now allow DAILY_FILE to be pushed)
+    try:
+        save_json(DAILY_FILE, data, push_to_github=True)
+        return True, "saved"
+    except Exception as e:
+        app.logger.error(f"[ERROR] append_daily_snapshot save failed: {e}")
+        return False, str(e)
 
 # ---------------------- Routes ----------------------
 @app.route("/")
 def index():
     return render_template("index.html")
+
 @app.route("/register", methods=["POST"])
 def register():
     # server-side admin password (set in environment)
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "ContactBatch321!")
-
-    # get posted admin password
     supplied_pw = request.form.get("admin_password", "")
 
-    # If password mismatch -> render the same registration page with an error
     if supplied_pw != ADMIN_PASSWORD:
-        # Render the registration template and show an error message
-        # Replace "register.html" with your actual template filename if different
         return render_template("index.html", error="Invalid admin password. Registration blocked.")
 
-    # --- existing logic (unchanged) ---
     name = request.form.get("name", "").strip()
     reg_type = request.form.get("registration_type", "team").strip().lower()
     if not name:
@@ -495,19 +536,16 @@ def register():
 
     ref_id = normalize_ref_id(name)
 
-    # Load existing users
     users = load_json(DATA_FILE, [])
-    existing = next((u for u in users if u.get("ref_id") == ref_id), None)
+    existing = next((u for u in users if normalize_ref_id(u.get("ref_id", "")) == ref_id), None)
     if existing:
         return redirect(url_for("progress", ref_id=ref_id))
 
-    # Assign number & link
     try:
         assigned_number, assigned_link = assign_link(reg_type)
     except Exception:
         assigned_number, assigned_link = (1, TEAM_LINKS.get(1))
 
-    # Build label
     label = f"TEAM{assigned_number}" if reg_type == "team" else f"REF{int(assigned_number):03d}"
 
     new_user = {
@@ -521,11 +559,9 @@ def register():
         "registered_at": int(time.time())
     }
 
-    # Merge into existing users list and save
     users.append(new_user)
     save_json(DATA_FILE, users, push_to_github=True)
 
-    # Initialize or update referrals for team users
     referrals = load_json(REF_FILE, {})
     referrals.setdefault("ALL", {})
 
@@ -533,19 +569,19 @@ def register():
         referrals["ALL"].setdefault(str(assigned_number), {"team_label": label, "referrals": 0})
     else:
         referrals.setdefault("SOLO", {})
-        referrals["SOLO"].setdefault(ref_id, {"team_label": label, "referrals": 0})
+        # store by canonical REF label so counting matches
+        referrals["SOLO"].setdefault(f"REF{int(assigned_number):03d}", {"team_label": label, "referrals": 0})
 
     save_json(REF_FILE, referrals, push_to_github=True)
-
     return redirect(url_for("progress", ref_id=ref_id))
 
 @app.route("/progress/<ref_id>", methods=["GET", "POST"])
 def progress(ref_id):
-    # optional quick sync
+    # try quick sync but ignore failure
     try:
         fetch_contacts_and_update()
     except Exception as e:
-        print("[WARN] Auto-sync failed:", e)
+        app.logger.warning("[WARN] Auto-sync failed: %s", e)
 
     users = load_json(DATA_FILE, [])
     norm = normalize_ref_id(ref_id)
@@ -555,71 +591,48 @@ def progress(ref_id):
 
     referrals = load_json(REF_FILE, {})
 
-    # determine registration type (explicit then fallback to team_label prefix)
     reg_type = (user.get("registration_type") or "").strip().lower()
     if not reg_type:
         tl = (user.get("team_label") or "").upper()
         reg_type = "solo" if tl.startswith("REF") else "team"
 
-    # group/team data used for leaderboard
     group_key = (user.get("group") or "").strip() or "ALL"
     raw_group_data = referrals.get(group_key, referrals.get("ALL", {}))
-    group_data = {str(k): v for k, v in raw_group_data.items()}
+    group_data = {str(k): v for k, v in (raw_group_data or {}).items()}
 
-    # ----- SOLO path (robust multi-key lookup) -----
     if reg_type == "solo":
         solo_map = referrals.get("SOLO", {}) or {}
-
-        # candidate keys in order of priority
-        solo_key_refid = user.get("ref_id")                    # e.g. "sultan"
-        solo_key_label = (user.get("team_label") or "").strip() # e.g. "REF001"
-        assigned_number = user.get("assigned_number")
-
         candidates = []
-        if solo_key_label:
-            candidates.append(solo_key_label)
-        if solo_key_refid:
-            candidates.append(solo_key_refid)
-        if assigned_number is not None:
-            try:
-                candidates.append(f"REF{int(assigned_number):03d}")
-            except Exception:
-                pass
+        tl = (user.get("team_label") or "").strip()
+        if tl:
+            candidates.append(tl)
+        if user.get("ref_id"):
+            candidates.append(user.get("ref_id"))
+        if user.get("assigned_number") is not None:
+            candidates.append(f"REF{int(user.get('assigned_number')):03d}")
 
-        # try candidates (exact + uppercase)
         team_info = None
-        found_key = None
         for c in candidates:
             if not c:
                 continue
-            # exact match
             if c in solo_map:
-                team_info = solo_map[c]; found_key = c; break
-            # upper-case match (covers "ref001" vs "REF001")
+                team_info = solo_map[c]; break
             cu = str(c).upper()
             if cu in solo_map:
-                team_info = solo_map[cu]; found_key = cu; break
-            # lower-case match (in case keys are lowercased)
+                team_info = solo_map[cu]; break
             cl = str(c).lower()
             if cl in solo_map:
-                team_info = solo_map[cl]; found_key = cl; break
+                team_info = solo_map[cl]; break
 
-        # if not found, don't fallback to team ALL — show safe default (0)
         if not team_info:
             team_info = {
-                "team_label": user.get("team_label", f"REF{int(user.get('assigned_number', 1)):03d}"),
+                "team_label": user.get("team_label", f"REF{int(user.get('assigned_number',1)):03d}"),
                 "referrals": 0
             }
 
-        # ensure integer referrals
-        try:
-            team_info["referrals"] = int(team_info.get("referrals", 0))
-        except Exception:
-            team_info["referrals"] = 0
-
+        team_info["referrals"] = safe_int(team_info.get("referrals", 0))
         referral_goal = 1000
 
-    # ----- TEAM path -----
     else:
         team_number = user.get("team_number") if user.get("team_number") is not None else user.get("assigned_number")
         try:
@@ -628,55 +641,17 @@ def progress(ref_id):
             team_number = 1
         team_key = str(team_number)
         team_info = group_data.get(team_key, {"team_label": user.get("team_label", f"TEAM{team_number}"), "referrals": 0})
-        try:
-            team_info["referrals"] = int(team_info.get("referrals", 0))
-        except Exception:
-            team_info["referrals"] = 0
-
-        # Default team goal is 10,000 but Team 2 uses 100,000
+        team_info["referrals"] = safe_int(team_info.get("referrals", 0))
         referral_goal = 10000
-        if team_number == 2:
-            referral_goal = 100000
 
-    # build leaderboard from group_data (teams)
     try:
         normalized_group_teams = {
-            str(k): {"team_label": v.get("team_label"), "referrals": int(v.get("referrals", 0))}
-            for k, v in group_data.items()
+            str(k): {"team_label": v.get("team_label"), "referrals": safe_int(v.get("referrals", 0))}
+            for k, v in (group_data or {}).items()
         }
-        group_teams = dict(
-            sorted(
-                normalized_group_teams.items(),
-                key=lambda kv: int(kv[1].get("referrals", 0)),
-                reverse=True
-            )
-        )
+        group_teams = dict(sorted(normalized_group_teams.items(), key=lambda kv: kv[1]["referrals"], reverse=True))
     except Exception:
         group_teams = group_data
-
-    # --- Contest end date (30-day window) ---
-    # Determine contest start from daily file first day, otherwise today.
-    try:
-        daily = read_daily_file()
-        days = daily.get("days", []) if daily and isinstance(daily, dict) else []
-        if days and isinstance(days, list) and days[0].get("date"):
-            start_date_str = days[0]["date"]
-        else:
-            start_date_str = datetime.utcnow().date().isoformat()
-        # parse YYYY-MM-DD -> date
-        try:
-            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-        except Exception:
-            start_date = datetime.utcnow().date()
-        end_date = start_date + timedelta(days=30)
-        contest_end_iso = end_date.isoformat() + "T00:00:00Z"
-    except Exception:
-        # fallback: 30 days from today
-        end_date = datetime.utcnow().date() + timedelta(days=30)
-        contest_end_iso = end_date.isoformat() + "T00:00:00Z"
-
-    # DEBUG OPTION (uncomment to log what was chosen)
-    # print("DEBUG progress:", {"ref_id": ref_id, "reg_type": reg_type, "found_solo_key": found_key if reg_type=='solo' else None, "team_info": team_info, "contest_end": contest_end_iso})
 
     return render_template(
         "progress.html",
@@ -685,55 +660,48 @@ def progress(ref_id):
         group_teams=group_teams,
         all_refs=referrals,
         referral_goal=referral_goal,
-        TEAM_LINKS=TEAM_LINKS,
-        contest_end_iso=contest_end_iso
+        TEAM_LINKS=TEAM_LINKS
     )
+
 @app.route("/public", methods=["POST", "GET"])
 def public():
-    # Always fetch fresh data from GitHub and update referral stats
-    result = fetch_contacts_and_update()
+    # Always fetch fresh data first (best-effort)
+    try:
+        result = fetch_contacts_and_update()
+    except Exception as e:
+        result = {"status": "error", "message": str(e)}
 
-    # Return JSON if requested
     if request.args.get("format") == "json" or request.is_json:
         return jsonify(result)
 
     referrals = load_json(REF_FILE, {})
 
-    # ✅ Pre-sort groups safely (works for both TEAM and SOLO)
     sorted_refs = {}
-    for group, teams in referrals.items():
+    for group, teams in (referrals or {}).items():
         try:
-            # Ensure we’re iterating a dict
             if isinstance(teams, dict):
                 safe_teams = {}
                 for k, v in teams.items():
-                    # normalize and ensure integer referral count
-                    try:
-                        ref_count = int(v.get("referrals", 0) or 0)
-                    except (TypeError, ValueError):
-                        ref_count = 0
+                    ref_count = safe_int((v or {}).get("referrals", 0))
                     safe_teams[str(k)] = {
-                        "team_label": v.get("team_label") or f"TEAM{k}",
+                        "team_label": (v or {}).get("team_label") or f"TEAM{k}",
                         "referrals": ref_count
                     }
-
-                # Sort safely by referral count
                 sorted_list = sorted(safe_teams.items(), key=lambda kv: kv[1]["referrals"], reverse=True)
                 sorted_refs[group] = {k: v for k, v in sorted_list}
             else:
                 sorted_refs[group] = teams
         except Exception as e:
-            print(f"[WARN] Failed to sort group {group}: {e}")
+            app.logger.warning(f"[WARN] Failed to sort group {group}: {e}")
             sorted_refs[group] = teams
 
-    # ✅ Render the leaderboard safely
-    return "SOON"
-    """return render_template(
+    # render leaderboard template
+    return render_template(
         "leaderboard.html",
         all_refs=sorted_refs,
         TEAM_LINKS=TEAM_LINKS,
         SOLO_LINKS=SOLO_LINKS
-    )"""
+    )
 
 @app.route("/auth")
 def auth():
@@ -785,60 +753,41 @@ def migrate_team_links():
         save_json(DATA_FILE, users, push_to_github=True)
     return jsonify({"status": "ok", "updated": changed})
 
-# ---------------------- New routes: daily snapshots & display ----------------------
+# ---------------------- Daily snapshot display & snapshot endpoint ----------------------
 @app.route("/daily-progress", methods=["GET"])
 def daily_progress():
-    """
-    Display 30-day daily snapshots grid and accumulated totals.
-    If no daily file exists, automatically initialize Day 1 with today's snapshot.
-    """
     daily = read_daily_file()
     days = daily.get("days", [])
-
     if not days:
-        # initialize with today's snapshot as day 1
         today_snapshot = build_today_snapshot()
         append_daily_snapshot(today_snapshot)
         daily = read_daily_file()
         days = daily.get("days", [])
-
-    # padded_days: length 30 (placeholders for future days)
-    padded_days = list(days)[:]  # shallow copy
+    padded_days = list(days)[:]
     while len(padded_days) < 30:
         padded_days.append({"date": None, "counts": {}})
 
-    # Build list of all labels (team and solo) appearing across snapshots or current REF_FILE
     refs = load_json(REF_FILE, {})
     labels_set = set()
-    # Teams from REF_FILE ALL
     for k in (refs.get("ALL") or {}).keys():
         try:
             labels_set.add(f"TEAM{int(k)}")
         except Exception:
             labels_set.add(f"TEAM{str(k)}")
-    # Solos from REF_FILE SOLO
     for k in (refs.get("SOLO") or {}).keys():
         labels_set.add(str(k))
-
-    # Also include labels discovered in existing daily days (if any)
     for d in days:
         for label in d.get("counts", {}).keys():
             labels_set.add(str(label))
-
-    # Prepare user mapping: label -> display name (if possible)
     users = load_json(DATA_FILE, []) or []
     label_to_name = {}
     for u in users:
         lbl = (u.get("team_label") or "").strip()
         if lbl:
-            # prefer explicit team_label -> name mapping
             label_to_name[lbl] = u.get("name") or lbl
-        # for teams, add TEAM# mapping if team_number exists
         tn = u.get("team_number")
         if tn is not None:
             label_to_name[f"TEAM{int(tn)}"] = label_to_name.get(f"TEAM{int(tn)}", f"Team {tn}")
-
-    # Build rows: each row contains 30 day counts + total
     rows = []
     for label in sorted(labels_set):
         day_counts = []
@@ -846,85 +795,28 @@ def daily_progress():
         for d in padded_days:
             c = 0
             if d.get("counts") and label in d["counts"]:
-                try:
-                    c = int(d["counts"][label])
-                except Exception:
-                    c = 0
+                c = safe_int(d["counts"][label])
             day_counts.append(c)
             total += c
-        rows.append({
-            "label": label,
-            "name": label_to_name.get(label, label),
-            "day_counts": day_counts,
-            "total": total
-        })
-
-    # Determine index of the latest recorded day (0-based)
-    latest_index = len(days) - 1
-    latest_index = max(0, latest_index)
-
-    # sort rows by latest day (daily leaderboard)
+        rows.append({"label": label, "name": label_to_name.get(label, label), "day_counts": day_counts, "total": total})
+    latest_index = max(0, len(days) - 1)
     rows_sorted_by_latest = sorted(rows, key=lambda r: r["day_counts"][latest_index], reverse=True)
-    # sort totals for accumulation leaderboard
     totals_sorted = sorted(rows, key=lambda r: r["total"], reverse=True)
-
-    # prepare day_dates list length 30
     day_dates = [d.get("date") for d in padded_days]
+    return render_template("daily_progress.html", day_dates=day_dates, rows=rows_sorted_by_latest, totals_sorted=totals_sorted, latest_index=latest_index)
 
-    return render_template(
-        "daily_progress.html",
-        day_dates=day_dates,
-        rows=rows_sorted_by_latest,
-        totals_sorted=totals_sorted,
-        latest_index=latest_index
-    )
-
-@app.route("/daily-progress/snapshot", methods=["GET", "POST"])
+@app.route("/daily-progress/snapshot", methods=["POST"])
 def daily_progress_snapshot():
-    """
-    Admin-protected endpoint to append today's snapshot.
-    Accepts:
-      - POST form field 'admin_password'
-      - X-Admin-Password header
-      - GET query param 'admin_password' or 'key' (useful for curl or quick browser calls)
-    GET without a password returns a simple HTML form explaining how to call the endpoint.
-    """
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "ContactBatch321!")
-
-    # Accept password from form (POST), header, or query (GET)
-    pw = ""
-    if request.method == "POST":
-        pw = request.form.get("admin_password") or request.headers.get("X-Admin-Password", "")
-    else:
-        # GET
-        pw = request.args.get("admin_password") or request.args.get("key") or request.headers.get("X-Admin-Password", "")
-
-    # If no password provided on GET, show a helpful HTML explanation (so clicking link won't give 405)
-    if not pw and request.method == "GET":
-        return (
-            "<h3>Daily snapshot endpoint</h3>"
-            "<p>This endpoint records today's referral snapshot (admin only).</p>"
-            "<p>To run it, POST to this URL with the admin password, or call:</p>"
-            "<pre>curl -X POST -d \"admin_password=YOUR_PASSWORD\" https://your-app/daily-progress/snapshot</pre>"
-            "<p>Or supply as a query parameter (less secure):</p>"
-            "<pre>https://your-app/daily-progress/snapshot?admin_password=YOUR_PASSWORD</pre>",
-            200,
-            {"Content-Type": "text/html"}
-        )
-
+    pw = request.form.get("admin_password") or request.headers.get("X-Admin-Password", "")
     if pw != ADMIN_PASSWORD:
         return jsonify({"ok": False, "reason": "forbidden"}), 403
-
-    # Perform snapshot
     snapshot = build_today_snapshot()
     ok, reason = append_daily_snapshot(snapshot)
-
-    # Return JSON for programmatic calls
     return jsonify({"ok": ok, "reason": reason, "date": snapshot["date"]})
-# ---------------------- End new daily routes ----------------------
 
+# ---------------------- Start ----------------------
 if __name__ == "__main__":
-    # start background updater (daemon)
     threading.Thread(target=background_updater, daemon=True).start()
-    print("✅ Flask app running with GitHub-backed JSON and Google Contacts sync.")
+    app.logger.info("✅ Flask app running with GitHub-backed JSON and Google Contacts sync.")
     app.run(debug=True)
