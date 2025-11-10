@@ -421,7 +421,7 @@ def register():
     if supplied_pw != ADMIN_PASSWORD:
         # Render the registration template and show an error message
         # Replace "register.html" with your actual template filename if different
-        return render_template("register.html", error="Invalid admin password. Registration blocked.")
+        return render_template("index.html", error="Invalid admin password. Registration blocked.")
 
     # --- existing logic (unchanged) ---
     name = request.form.get("name", "").strip()
