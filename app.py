@@ -469,7 +469,7 @@ def progress(ref_id):
     group_data = {str(k): v for k, v in raw_group_data.items()}
 
     # team numbers stored as ints on users, but referral keys are strings like "1"
-    team_number = int(user.get("team_number") or 1)
+    team_number = int(user.get("team_number") or user.get("assigned_number") or 1)
 
     team_key = str(team_number)
 
