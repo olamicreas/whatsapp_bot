@@ -48,6 +48,15 @@
           <td class="p-2 text-right font-semibold">{{ row.total }}</td>
         </tr>
         {% endfor %}
+
+        {# --- NEW SECTION: Daily Totals row --- #}
+        <tr class="border-t bg-gray-100 font-semibold">
+          <td class="p-2 text-sm text-gray-800" colspan="2">Daily Referral Totals</td>
+          {% for day_sum in daily_totals %}
+            <td class="p-2 text-right">{{ day_sum }}</td>
+          {% endfor %}
+          <td class="p-2 text-right">{{ overall_total }}</td>
+        </tr>
       </tbody>
     </table>
   </div>
