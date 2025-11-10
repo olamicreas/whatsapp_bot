@@ -6,37 +6,20 @@
     to { transform: translateY(0) scale(1); opacity: 1; }
   }
 
-  .shimmer {
-    position: relative;
-    overflow: hidden;
-  }
+  .shimmer { position: relative; overflow: hidden; }
   .shimmer::after {
-    content: "";
-    position: absolute;
-    inset: 0;
+    content: ""; position: absolute; inset: 0;
     background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.1) 45%, rgba(255,255,255,0) 85%);
-    transform: translateX(-110%);
-    animation: shimmer 2.5s linear infinite;
+    transform: translateX(-110%); animation: shimmer 2.5s linear infinite;
   }
   @keyframes shimmer { to { transform: translateX(110%); } }
 
-  @keyframes growWidth {
-    from { width: 0%; }
-    to { width: var(--w, 0%); }
-  }
+  @keyframes growWidth { from { width: 0%; } to { width: var(--w, 0%); } }
 
-  .bg-blob {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    z-index: 0;
-    filter: blur(30px) saturate(120%);
-    opacity: 0.18;
-  }
+  .bg-blob { position: absolute; inset: 0; pointer-events: none; z-index: 0; filter: blur(30px) saturate(120%); opacity: 0.18; }
 </style>
 
 <div class="relative overflow-hidden">
-  <!-- Decorative background blobs (cooler, modern tones) -->
   <svg class="bg-blob" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
     <defs>
       <linearGradient id="g1" x1="0" x2="1">
@@ -53,8 +36,6 @@
   </svg>
 
   <div class="space-y-6 relative z-10 animate-fade-slide">
-
-    <!-- Header -->
     <div class="text-center">
       <h1 class="text-3xl sm:text-4xl font-extrabold shimmer">
         <span class="bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 via-indigo-300 to-violet-400">🏆 Global Leaderboard</span>
@@ -99,7 +80,7 @@
     </div>
     {% endif %}
 
-    <!-- SOLO / Individual REF section (NEW) -->
+    {# SOLO / Individual REF section #}
     {% set solo = all_refs.get('SOLO') if all_refs is mapping else None %}
     {% if solo and solo|length %}
     <div class="max-w-md mx-auto bg-white/6 border border-white/10 rounded-3xl p-4 shadow-lg backdrop-blur-md">
@@ -120,15 +101,11 @@
           </div>
           <div class="text-right">
             <div class="text-lg font-extrabold text-cyan-300">{{ info.referrals | default(0) }}</div>
-            {% set solo_link = SOLO_LINKS.get(loop.index) if SOLO_LINKS is mapping else (SOLO_LINKS.get(ref_key) if SOLO_LINKS is mapping else None) %}
             {% if SOLO_LINKS is mapping %}
-              {# prefer explicit key by ref_key if provided (e.g. REF001) else by index #}
               {% set s_link = SOLO_LINKS.get(ref_key) or SOLO_LINKS.get(loop.index) %}
-            {% else %}
-              {% set s_link = None %}
-            {% endif %}
-            {% if s_link %}
-              <a href="{{ s_link }}" target="_blank" class="text-xs text-indigo-200 block mt-1 hover:underline">Open</a>
+              {% if s_link %}
+                <a href="{{ s_link }}" target="_blank" class="text-xs text-indigo-200 block mt-1 hover:underline">Open</a>
+              {% endif %}
             {% endif %}
           </div>
         </div>
@@ -137,56 +114,54 @@
     </div>
     {% endif %}
 
-    <!-- Full grouped leaderboard (skip SOLO group) -->
+    {# Full grouped leaderboard (skip SOLO group) #}
     <div class="space-y-5">
       {% if all_refs %}
         {% for group, teams in all_refs.items() %}
-          {% if group == 'SOLO' %}
-            {# skip, already rendered above #}
-            {% continue %}
-          {% endif %}
-          <section class="max-w-md mx-auto bg-white/10 border border-white/10 rounded-3xl p-4 shadow-lg backdrop-blur-md">
-            <header class="flex items-center justify-between mb-3">
-              <div>
-                <h3 class="text-lg font-bold text-white">{{ group }}</h3>
-                <p class="text-xs text-gray-400">{{ teams|length }} teams</p>
+          {% if group != 'SOLO' %}
+            <section class="max-w-md mx-auto bg-white/10 border border-white/10 rounded-3xl p-4 shadow-lg backdrop-blur-md">
+              <header class="flex items-center justify-between mb-3">
+                <div>
+                  <h3 class="text-lg font-bold text-white">{{ group }}</h3>
+                  <p class="text-xs text-gray-400">{{ teams|length }} teams</p>
+                </div>
+                <div class="text-xs text-gray-400">Sorted by referrals</div>
+              </header>
+
+              <div class="space-y-3">
+                {% for tid, info in teams.items() %}
+                  {% set referrals = info.referrals | default(0) %}
+                  {% set pct = (referrals if referrals <= 100 else 100) %}
+                  <article class="p-3 rounded-xl bg-white/5 flex items-center justify-between gap-3"
+                           style="animation: slideUpFade .45s ease both; animation-delay: {{ loop.index0 * 0.06 }}s;">
+                    <div class="flex items-center gap-3">
+                      <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-indigo-600 to-cyan-500 text-white font-bold shadow">
+                        <div class="text-sm">{{ tid }}</div>
+                      </div>
+                      <div>
+                        <div class="text-sm font-semibold text-white">{{ info.team_label }}</div>
+                        <div class="text-xs text-gray-400">{{ group }}</div>
+                      </div>
+                    </div>
+
+                    <div class="w-28 sm:w-36">
+                      <div class="text-right text-sm font-bold text-cyan-300">{{ referrals }}</div>
+                      <div class="mt-2 h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div class="h-2 bg-gradient-to-r from-cyan-400 to-indigo-500 rounded-full"
+                             style="--w: {{ pct }}%; width: 0%; animation: growWidth 1.1s ease forwards; animation-delay: .18s;"></div>
+                      </div>
+                    </div>
+
+                    <div class="flex flex-col items-end gap-2">
+                      <a href="{{ TEAM_LINKS.get(tid|int, '#') }}" target="_blank"
+                         class="px-3 py-1 rounded-lg bg-indigo-600 text-xs font-semibold hover:bg-indigo-500 transition">Open</a>
+                      <div class="text-xs text-gray-400">Team {{ tid }}</div>
+                    </div>
+                  </article>
+                {% endfor %}
               </div>
-              <div class="text-xs text-gray-400">Sorted by referrals</div>
-            </header>
-
-            <div class="space-y-3">
-              {% for tid, info in teams.items() %}
-                {% set referrals = info.referrals | default(0) %}
-                {% set pct = (referrals if referrals <= 100 else 100) %}
-                <article class="p-3 rounded-xl bg-white/5 flex items-center justify-between gap-3"
-                         style="animation: slideUpFade .45s ease both; animation-delay: {{ loop.index0 * 0.06 }}s;">
-                  <div class="flex items-center gap-3">
-                    <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-indigo-600 to-cyan-500 text-white font-bold shadow">
-                      <div class="text-sm">{{ tid }}</div>
-                    </div>
-                    <div>
-                      <div class="text-sm font-semibold text-white">{{ info.team_label }}</div>
-                      <div class="text-xs text-gray-400">{{ group }}</div>
-                    </div>
-                  </div>
-
-                  <div class="w-28 sm:w-36">
-                    <div class="text-right text-sm font-bold text-cyan-300">{{ referrals }}</div>
-                    <div class="mt-2 h-2 bg-white/10 rounded-full overflow-hidden">
-                      <div class="h-2 bg-gradient-to-r from-cyan-400 to-indigo-500 rounded-full"
-                           style="--w: {{ pct }}%; width: 0%; animation: growWidth 1.1s ease forwards; animation-delay: .18s;"></div>
-                    </div>
-                  </div>
-
-                  <div class="flex flex-col items-end gap-2">
-                    <a href="{{ TEAM_LINKS.get(tid|int, '#') }}" target="_blank"
-                       class="px-3 py-1 rounded-lg bg-indigo-600 text-xs font-semibold hover:bg-indigo-500 transition">Open</a>
-                    <div class="text-xs text-gray-400">Team {{ tid }}</div>
-                  </div>
-                </article>
-              {% endfor %}
-            </div>
-          </section>
+            </section>
+          {% endif %}
         {% endfor %}
       {% else %}
         <div class="max-w-md mx-auto text-center text-gray-400 p-6 rounded-xl">No referral data available.</div>
@@ -239,4 +214,3 @@
   }
 </script>
 {% endblock %}
-
