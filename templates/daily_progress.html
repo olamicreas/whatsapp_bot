@@ -1,0 +1,84 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-6">
+  <h2 class="text-xl font-extrabold mb-4">30-Day Daily Referral Progress</h2>
+  <p class="text-sm text-gray-500 mb-4">
+    Daily snapshots starting from the first recorded day (today if newly initialized). Columns represent Day 1 → Day 30.
+  </p>
+
+  <div class="mb-4 flex items-center gap-3">
+    <form method="POST" action="/daily-progress/snapshot" class="inline-flex gap-2">
+      <input type="password" name="admin_password" placeholder="Admin password" class="p-2 border rounded" />
+      <button class="px-3 py-2 bg-indigo-600 text-white rounded">Record today's snapshot</button>
+    </form>
+    <div class="text-sm text-gray-500">Tip: run snapshot once per day (or schedule via cron) to record daily counts.</div>
+  </div>
+
+  <div class="overflow-auto border rounded">
+    <table class="w-full min-w-max table-auto">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="p-2 text-left">Label</th>
+          <th class="p-2 text-left">Name</th>
+
+          {# Day headers 1..30; bold those that are weekly (multiple of 7) #}
+          {% for i in range(1,31) %}
+            {% set idx = i-1 %}
+            {% set ddate = day_dates[idx] %}
+            <th class="p-2 text-right {% if i % 7 == 0 %}font-bold{% endif %}">
+              <div class="text-xs text-gray-500">Day {{ i }}</div>
+              <div class="text-xs text-gray-400">{% if ddate %}{{ ddate }}{% endif %}</div>
+            </th>
+          {% endfor %}
+
+          <th class="p-2 text-right">Total</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for row in rows %}
+        <tr class="border-t">
+          <td class="p-2 text-sm font-medium">{{ row.label }}</td>
+          <td class="p-2 text-sm text-gray-600">{{ row.name }}</td>
+
+          {% for cnt in row.day_counts %}
+            <td class="p-2 text-right">{{ cnt }}</td>
+          {% endfor %}
+
+          <td class="p-2 text-right font-semibold">{{ row.total }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="mt-6">
+    <h3 class="text-lg font-semibold mb-2">Accumulated Totals (All recorded days)</h3>
+    <div class="overflow-auto border rounded">
+      <table class="w-full min-w-max table-auto">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="p-2 text-left">Label</th>
+            <th class="p-2 text-left">Name</th>
+            <th class="p-2 text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in totals_sorted %}
+          <tr class="border-t">
+            <td class="p-2">{{ row.label }}</td>
+            <td class="p-2 text-gray-600">{{ row.name }}</td>
+            <td class="p-2 text-right font-semibold">{{ row.total }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="mt-6 text-sm text-gray-500">
+    <p>Weekly columns (Day 7, 14, 21, 28) are bolded for easy scanning.</p>
+    <p class="mt-1">After 30 days, use the Accumulated Totals table to see the full sum across recorded days.</p>
+  </div>
+</div>
+{% endblock %}
