@@ -62,11 +62,14 @@
       <p class="mt-2 text-sm text-gray-300/80">Top performing teams across all groups</p>
     </div>
 
+    {# flatten all teams (excluding SOLO) for top5 calculation #}
     {% set global_flat = [] %}
     {% for group, teams in all_refs.items() %}
-      {% for tid, info in teams.items() %}
-        {% set _ = global_flat.append({'group': group, 'tid': tid, 'label': info.team_label, 'referrals': info.referrals|default(0)}) %}
-      {% endfor %}
+      {% if group != 'SOLO' %}
+        {% for tid, info in teams.items() %}
+          {% set _ = global_flat.append({'group': group, 'tid': tid, 'label': info.team_label, 'referrals': info.referrals|default(0)}) %}
+        {% endfor %}
+      {% endif %}
     {% endfor %}
 
     {% set top_sorted = global_flat | sort(attribute='referrals') %}
@@ -88,7 +91,7 @@
           </div>
           <div class="text-right">
             <div class="text-lg font-extrabold text-cyan-300">{{ t.referrals }}</div>
-            <a href="{{ TEAM_LINKS[t.tid|int] }}" target="_blank" class="text-xs text-indigo-300 mt-1 block hover:underline">View</a>
+            <a href="{{ TEAM_LINKS.get(t.tid|int, '#') }}" target="_blank" class="text-xs text-indigo-300 mt-1 block hover:underline">View</a>
           </div>
         </div>
         {% endfor %}
@@ -96,10 +99,52 @@
     </div>
     {% endif %}
 
-    <!-- Full grouped leaderboard -->
+    <!-- SOLO / Individual REF section (NEW) -->
+    {% set solo = all_refs.get('SOLO') if all_refs is mapping else None %}
+    {% if solo and solo|length %}
+    <div class="max-w-md mx-auto bg-white/6 border border-white/10 rounded-3xl p-4 shadow-lg backdrop-blur-md">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <h3 class="text-lg font-bold text-white">Individual REF</h3>
+          <p class="text-xs text-gray-400">Personal referral counts (REF001–REF005)</p>
+        </div>
+        <div class="text-xs text-gray-400">Individuals</div>
+      </div>
+
+      <div class="space-y-2">
+        {% for ref_key, info in solo.items() %}
+        <div class="flex items-center justify-between p-3 rounded-xl bg-white/5">
+          <div>
+            <div class="text-sm font-semibold text-white">{{ info.team_label or ref_key }}</div>
+            <div class="text-xs text-gray-400">{{ ref_key }}</div>
+          </div>
+          <div class="text-right">
+            <div class="text-lg font-extrabold text-cyan-300">{{ info.referrals | default(0) }}</div>
+            {% set solo_link = SOLO_LINKS.get(loop.index) if SOLO_LINKS is mapping else (SOLO_LINKS.get(ref_key) if SOLO_LINKS is mapping else None) %}
+            {% if SOLO_LINKS is mapping %}
+              {# prefer explicit key by ref_key if provided (e.g. REF001) else by index #}
+              {% set s_link = SOLO_LINKS.get(ref_key) or SOLO_LINKS.get(loop.index) %}
+            {% else %}
+              {% set s_link = None %}
+            {% endif %}
+            {% if s_link %}
+              <a href="{{ s_link }}" target="_blank" class="text-xs text-indigo-200 block mt-1 hover:underline">Open</a>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Full grouped leaderboard (skip SOLO group) -->
     <div class="space-y-5">
       {% if all_refs %}
         {% for group, teams in all_refs.items() %}
+          {% if group == 'SOLO' %}
+            {# skip, already rendered above #}
+            {% continue %}
+          {% endif %}
           <section class="max-w-md mx-auto bg-white/10 border border-white/10 rounded-3xl p-4 shadow-lg backdrop-blur-md">
             <header class="flex items-center justify-between mb-3">
               <div>
@@ -134,7 +179,7 @@
                   </div>
 
                   <div class="flex flex-col items-end gap-2">
-                    <a href="{{ TEAM_LINKS[tid|int] }}" target="_blank"
+                    <a href="{{ TEAM_LINKS.get(tid|int, '#') }}" target="_blank"
                        class="px-3 py-1 rounded-lg bg-indigo-600 text-xs font-semibold hover:bg-indigo-500 transition">Open</a>
                     <div class="text-xs text-gray-400">Team {{ tid }}</div>
                   </div>
@@ -194,3 +239,4 @@
   }
 </script>
 {% endblock %}
+
