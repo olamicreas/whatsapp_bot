@@ -13,11 +13,15 @@
       <div class="flex items-center justify-between">
         <div>
           <div class="text-lg font-bold">{{ user.name }}</div>
-          <div class="text-xs text-gray-500">Group: <span class="font-semibold text-purple-600">{{ user.group or "—" }}</span></div>
+          <div class="text-xs text-gray-500">
+            Group: <span class="font-semibold text-purple-600">{{ user.group or "—" }}</span>
+          </div>
         </div>
         <div class="text-right text-sm">
-          <div class="text-xs text-gray-400">Team</div>
-          <div class="font-bold text-purple-600">{{ user.team_label }}</div>
+          <div class="text-xs text-gray-400">Type</div>
+          <div class="font-bold text-purple-600">
+            {{ "Individual" if (user.registration_type|default('')) == 'solo' else "Team" }}
+          </div>
         </div>
       </div>
     </div>
@@ -25,7 +29,10 @@
 
   <!-- Big referrals stat -->
   <div class="p-4 rounded-2xl bg-gradient-to-r from-purple-50 to-pink-50">
-    <div class="text-xs text-gray-500">Team referrals</div>
+    <div class="text-xs text-gray-500">
+      {{ "Individual referrals" if (user.registration_type|default('')) == 'solo' else "Team referrals" }}
+    </div>
+
     <div class="flex items-baseline justify-between mt-2">
       <div class="text-4xl font-extrabold text-purple-700">{{ team_info.referrals | default(0) }}</div>
       <div class="text-right">
@@ -36,7 +43,7 @@
 
     <div class="mt-3">
       <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
-        {% set referrals_count = team_info.referrals | default(0) %}
+        {% set referrals_count = (team_info.referrals | default(0)) %}
         {% if referrals_count is number and referral_goal and referral_goal > 0 %}
           {% set bar_width = (referrals_count / referral_goal * 100) if referrals_count <= referral_goal else 100 %}
         {% else %}
@@ -105,11 +112,11 @@
         {% for ref_key, info in solo.items() %}
           <div class="flex items-center justify-between p-3 rounded-xl bg-white bg-opacity-6">
             <div>
-              <div class="text-sm font-semibold text-white">{{ info.team_label or ref_key }}</div>
-              <div class="text-xs text-gray-300">{{ ref_key }}</div>
+              <div class="text-sm font-semibold text-gray-900">{{ info.team_label or ref_key }}</div>
+              <div class="text-xs text-gray-500">{{ ref_key }}</div>
             </div>
             <div class="text-right">
-              <div class="text-lg font-extrabold text-purple-300">{{ info.referrals | default(0) }}</div>
+              <div class="text-lg font-extrabold text-purple-700">{{ info.referrals | default(0) }}</div>
               <div class="text-xs text-gray-400">individuals</div>
             </div>
           </div>
