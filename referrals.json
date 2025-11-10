@@ -2,11 +2,11 @@
     "ALL": {
         "1": {
             "team_label": "TEAM1",
-            "referrals": 21
+            "referrals": 26
         },
         "2": {
             "team_label": "TEAM2",
-            "referrals": 0
+            "referrals": 2
         },
         "3": {
             "team_label": "TEAM3",
