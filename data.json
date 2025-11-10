@@ -28,5 +28,15 @@
         "team_label": "TEAM2",
         "team_link": "https://wa.link/uiv1az",
         "registered_at": 1762777782
+    },
+    {
+        "name": "GISTHOOD",
+        "ref_id": "gisthood",
+        "registration_type": "solo",
+        "assigned_number": 2,
+        "team_number": null,
+        "team_label": "REF002",
+        "team_link": "https://wa.link/stv0mr",
+        "registered_at": 1762781589
     }
 ]
