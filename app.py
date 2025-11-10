@@ -296,35 +296,54 @@ def fetch_contacts_and_update():
             groups.setdefault(group, {})
             groups[group].setdefault(team_num, {"team_label": f"TEAM{team_num}", "count": 0})
 
-        # helper to check if a contact mentions a team
+        # --------------------------
+        # Prepare SOLO/individual refs
+        # We'll count REF001..REF005 (you can expand the range if needed)
+        # --------------------------
+        SOLO_MAX = 5
+        solo_refs = {i: {"ref_label": f"REF{str(i).zfill(3)}", "count": 0} for i in range(1, SOLO_MAX + 1)}
+
+        # helper to check if a contact mentions a team (local helper kept for punctuation-tolerant matching)
         def contact_mentions_team_local(contact, team_number):
-            # flexible regex: TEAM1, TEAM 1, TEAM1., TEAM1!
             token_pattern = re.compile(r"TEAM\s*{}\b".format(team_number), flags=re.I)
 
             texts = []
             for field in ["names", "biographies", "organizations", "userDefined"]:
                 if field in contact:
                     for item in contact[field]:
-                        # collect all possible string values
                         for key in ["displayName", "value", "name", "title"]:
-                            if key in item and item[key]:
-                                texts.append(item[key])
+                            if isinstance(item, dict) and item.get(key):
+                                texts.append(item.get(key))
+                            elif not isinstance(item, dict) and item:
+                                texts.append(str(item))
 
             combined = " ".join([t for t in texts if t])
             combined_clean = re.sub(r"[^\w\s]", "", combined)  # remove punctuation
-            if token_pattern.search(combined_clean):
-                return True
-            return False
+            return bool(token_pattern.search(combined_clean))
 
-        # scan contacts and increment team counts when matched
+        # scan contacts and increment team counts and solo refs when matched
         for contact in connections:
+            # teams per group
             for group, teams in groups.items():
                 for team_num in list(teams.keys()):
-                    if contact_mentions_team(contact, group, team_num):
+                    if contact_mentions_team(contact, group, team_num) or contact_mentions_team_local(contact, team_num):
                         teams[team_num]["count"] += 1
                         # debug log
-                        name = contact.get("names", [{"displayName": "Unknown"}])[0]["displayName"]
+                        try:
+                            name = contact.get("names", [{"displayName": "Unknown"}])[0].get("displayName", "Unknown")
+                        except Exception:
+                            name = "Unknown"
                         print(f"[MATCH] {name} counted for {group} TEAM{team_num}")
+
+            # solo refs REF001..REF005
+            for i in range(1, SOLO_MAX + 1):
+                if contact_mentions_ref(contact, i):
+                    solo_refs[i]["count"] += 1
+                    try:
+                        name = contact.get("names", [{"displayName": "Unknown"}])[0].get("displayName", "Unknown")
+                    except Exception:
+                        name = "Unknown"
+                    print(f"[MATCH] {name} counted for SOLO {solo_refs[i]['ref_label']}")
 
         # build referrals dict saved to REF_FILE
         referrals = {}
@@ -336,9 +355,19 @@ def fetch_contacts_and_update():
                     "referrals": info["count"]
                 }
 
+        # add SOLO group with REF001..REF005 counts
+        referrals.setdefault("SOLO", {})
+        for i, info in solo_refs.items():
+            # store under keys "REF001" (or simply numeric keys if you prefer)
+            key = f"REF{str(i).zfill(3)}"
+            referrals["SOLO"][key] = {
+                "team_label": info["ref_label"],
+                "referrals": info["count"]
+            }
+
         # save locally and push to GitHub (if configured)
         save_json(REF_FILE, referrals, push_to_github=True)
-        print("[AUTO-UPDATE] Referral counts per group/team synced from Google Contacts.")
+        print("[AUTO-UPDATE] Referral counts per group/team and SOLO synced from Google Contacts.")
         return {"status": "ok", "groups": len(referrals)}
 
     except Exception as e:
