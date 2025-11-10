@@ -477,7 +477,7 @@ def register():
 
 @app.route("/progress/<ref_id>", methods=["GET", "POST"])
 def progress(ref_id):
-    # best-effort quick sync (keep if you want)
+    # quick sync (optional)
     try:
         fetch_contacts_and_update()
     except Exception as e:
@@ -491,48 +491,31 @@ def progress(ref_id):
 
     referrals = load_json(REF_FILE, {})
 
-    # determine registration type (explicit field first; fall back to label check)
+    # determine registration type (explicit field first; fallback to label)
     reg_type = (user.get("registration_type") or "").strip().lower()
     if not reg_type:
-        # if registration_type was missing, detect by team_label prefix (REFxxx -> solo)
         tl = (user.get("team_label") or "").upper()
-        if tl.startswith("REF"):
-            reg_type = "solo"
-        else:
-            reg_type = "team"
+        reg_type = "solo" if tl.startswith("REF") else "team"
 
-    # Default group_key (some implementations use groups, keep compatibility)
+    # prepare group/team data for leaderboard
     group_key = (user.get("group") or "").strip() or "ALL"
-
-    # prepare group/team data (for leaderboard)
     raw_group_data = referrals.get(group_key, referrals.get("ALL", {}))
     group_data = {str(k): v for k, v in raw_group_data.items()}
 
-    # --- SOLO user path ---
+    # SOLO user: read only from referrals["SOLO"]
     if reg_type == "solo":
-        # Try direct SOLO map first
-        solo_map = referrals.get("SOLO", {})
+        solo_map = referrals.get("SOLO", {}) or {}
         solo_key = user.get("ref_id")
-        team_info = None
+        team_info = solo_map.get(solo_key)
 
-        if solo_map and solo_key:
-            team_info = solo_map.get(solo_key)
-
-        # Fallback: maybe sync mistakenly wrote to ALL under assigned_number
-        if not team_info:
-            assigned_number = user.get("assigned_number")
-            if assigned_number is not None:
-                all_map = referrals.get("ALL", {})
-                team_info = all_map.get(str(assigned_number))
-
-        # Final fallback: build a safe default
+        # If there is no SOLO entry, show a safe default (0) — DO NOT fallback to ALL
         if not team_info:
             team_info = {
                 "team_label": user.get("team_label", f"REF{int(user.get('assigned_number', 1)):03d}"),
                 "referrals": 0
             }
 
-        # Ensure referrals is integer
+        # force integer conversions
         try:
             team_info["referrals"] = int(team_info.get("referrals", 0))
         except Exception:
@@ -540,29 +523,22 @@ def progress(ref_id):
 
         referral_goal = 1000
 
-    # --- TEAM / GROUP user path ---
+    # TEAM user: normal ALL lookup
     else:
-        # use group_data prepared above (from group_key or ALL)
-        team_number = user.get("team_number")
-        if team_number is None:
-            team_number = user.get("assigned_number")
-
+        team_number = user.get("team_number") if user.get("team_number") is not None else user.get("assigned_number")
         try:
             team_number = int(team_number)
         except Exception:
             team_number = 1
-
         team_key = str(team_number)
         team_info = group_data.get(team_key, {"team_label": user.get("team_label", f"TEAM{team_number}"), "referrals": 0})
-
         try:
             team_info["referrals"] = int(team_info.get("referrals", 0))
         except Exception:
             team_info["referrals"] = 0
-
         referral_goal = 10000
 
-    # prepare mini leaderboard from group_data (teams only)
+    # prepare mini leaderboard (teams only)
     try:
         normalized_group_teams = {
             str(k): {"team_label": v.get("team_label"), "referrals": int(v.get("referrals", 0))}
@@ -578,7 +554,6 @@ def progress(ref_id):
     except Exception:
         group_teams = group_data
 
-    # Pass values to template (template expects team_info and referral_goal)
     return render_template(
         "progress.html",
         user=user,
