@@ -37,6 +37,10 @@
         "godwin": {
             "team_label": "REF003",
             "referrals": 0
+        },
+        "josh": {
+            "team_label": "REF004",
+            "referrals": 0
         }
     }
 }
