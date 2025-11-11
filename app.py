@@ -696,12 +696,13 @@ def public():
             sorted_refs[group] = teams
 
     # render leaderboard template
-    return render_template(
+    return redirect("index")
+    """return render_template(
         "leaderboard.html",
         all_refs=sorted_refs,
         TEAM_LINKS=TEAM_LINKS,
         SOLO_LINKS=SOLO_LINKS
-    )
+    )"""
 
 @app.route("/auth")
 def auth():
