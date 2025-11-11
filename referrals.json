@@ -6,7 +6,7 @@
         },
         "2": {
             "team_label": "TEAM2",
-            "referrals": 34
+            "referrals": 57
         },
         "3": {
             "team_label": "TEAM3",
@@ -16,7 +16,7 @@
     "SOLO": {
         "REF001": {
             "team_label": "REF001",
-            "referrals": 42
+            "referrals": 46
         },
         "REF002": {
             "team_label": "REF002",
@@ -28,7 +28,7 @@
         },
         "REF004": {
             "team_label": "REF004",
-            "referrals": 28
+            "referrals": 29
         },
         "REF005": {
             "team_label": "REF005",
@@ -36,11 +36,11 @@
         },
         "REF006": {
             "team_label": "REF006",
-            "referrals": 1
+            "referrals": 5
         },
         "REF007": {
             "team_label": "REF007",
-            "referrals": 1
+            "referrals": 2
         },
         "REF008": {
             "team_label": "REF008",
