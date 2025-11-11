@@ -664,7 +664,12 @@ def progress(ref_id):
         team_key = str(team_number)
         team_info = group_data.get(team_key, {"team_label": user.get("team_label", f"TEAM{team_number}"), "referrals": 0})
         team_info["referrals"] = safe_int(team_info.get("referrals", 0))
-        referral_goal = 10000
+
+        # <-- Only team 2 has a special goal -->
+        if team_number == 2:
+            referral_goal = 100000
+        else:
+            referral_goal = 10000
 
     try:
         normalized_group_teams = {
@@ -698,7 +703,7 @@ def progress(ref_id):
         SOLO_LINKS=SOLO_LINKS,
         contest_end_iso=contest_end_iso
     )
-
+    
 @app.route("/public", methods=["POST", "GET"])
 def public():
     # Always fetch fresh data first (best-effort)
