@@ -599,7 +599,7 @@ def register():
 
 @app.route("/progress/<ref_id>", methods=["GET", "POST"])
 def progress(ref_id):
-    # try quick sync but ignore failure
+    # Try quick sync but ignore failure
     try:
         fetch_contacts_and_update()
     except Exception as e:
@@ -622,6 +622,7 @@ def progress(ref_id):
     raw_group_data = referrals.get(group_key, referrals.get("ALL", {}))
     group_data = {str(k): v for k, v in (raw_group_data or {}).items()}
 
+    # -------------------- SOLO LOGIC --------------------
     if reg_type == "solo":
         solo_map = referrals.get("SOLO", {}) or {}
         candidates = []
@@ -655,67 +656,49 @@ def progress(ref_id):
         team_info["referrals"] = safe_int(team_info.get("referrals", 0))
         referral_goal = 1000
 
+    # -------------------- TEAM LOGIC --------------------
     else:
         team_number = user.get("team_number") if user.get("team_number") is not None else user.get("assigned_number")
         try:
             team_number = int(team_number)
         except Exception:
             team_number = 1
+
         team_key = str(team_number)
-        team_info = group_data.get(team_key, {"team_label": user.get("team_label", f"TEAM{team_number}"), "referrals": 0})
+        team_info = group_data.get(team_key, {
+            "team_label": user.get("team_label", f"TEAM{team_number}"),
+            "referrals": 0
+        })
         team_info["referrals"] = safe_int(team_info.get("referrals", 0))
 
-        # <-- Only team 2 has a special goal -->
+        # Team 2 special goal
         if team_number == 2:
             referral_goal = 100000
         else:
             referral_goal = 10000
 
+    # -------------------- SORT GROUP TEAMS --------------------
     try:
         normalized_group_teams = {
             str(k): {"team_label": v.get("team_label"), "referrals": safe_int(v.get("referrals", 0))}
             for k, v in (group_data or {}).items()
         }
-        group_teams = dict(sorted(normalized_group_teams.items(), key=lambda kv: kv[1]["referrals"], reverse=True))
+        group_teams = dict(sorted(
+            normalized_group_teams.items(),
+            key=lambda kv: kv[1]["referrals"],
+            reverse=True
+        ))
     except Exception:
         group_teams = group_data
 
-    # -------------------- NEW: contest start/end handling for countdown --------------------
-    # Priority:
-    # 1) Use CONTEST_END_ISO if provided
-    # 2) Else, if CONTEST_START_ISO provided -> end = start + CONTEST_DAYS
-    # 3) Else, if CONTEST_STARTED_YESTERDAY env var set (1/true/yes) -> start = now - 1 day
-    # 4) Else start = now
-    # In cases 2-4 we compute end = start + CONTEST_DAYS days.
-    contest_end_iso = os.getenv("CONTEST_END_ISO", "").strip() or None
-    if not contest_end_iso:
-        # how many days the contest lasts (default 30)
-        try:
-            days_from_now = int(os.getenv("CONTEST_DAYS", "29"))
-        except Exception:
-            days_from_now = 29
-
-        contest_start_iso_env = os.getenv("CONTEST_START_ISO", "").strip() or None
-        contest_started_yesterday = str(os.getenv("CONTEST_STARTED_YESTERDAY", "")).strip().lower() in ("1", "true", "yes")
-
-        # determine start datetime (UTC)
-        start_dt = None
-        if contest_start_iso_env:
-            try:
-                # tolerate trailing Z
-                start_dt = datetime.fromisoformat(contest_start_iso_env.replace("Z", ""))
-            except Exception:
-                start_dt = None
-
-        if start_dt is None:
-            if contest_started_yesterday:
-                start_dt = datetime.utcnow() - timedelta(days=1)
-            else:
-                start_dt = datetime.utcnow()
-
-        end_dt = start_dt + timedelta(days=days_from_now)
-        contest_end_iso = end_dt.isoformat() + "Z"
-    # -----------------------------------------------------------------------
+    # -------------------- HARDCODED CONTEST COUNTDOWN --------------------
+    # Contest starts: 2025-11-10T00:00:00Z (yesterday)
+    # Duration: 30 days
+    contest_start = datetime(2025, 11, 10, 0, 0, 0)
+    contest_duration_days = 30
+    contest_end = contest_start + timedelta(days=contest_duration_days)
+    contest_end_iso = contest_end.isoformat() + "Z"
+    # --------------------------------------------------------------------
 
     return render_template(
         "progress.html",
