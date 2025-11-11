@@ -68,6 +68,15 @@
         "team_label": "REF005",
         "team_link": "https://wa.link/l09mvf",
         "registered_at": 1762850197
+    },
+    {
+        "name": "STREETTECH",
+        "ref_id": "streettech",
+        "registration_type": "team",
+        "assigned_number": 3,
+        "team_number": 3,
+        "team_label": "TEAM3",
+        "team_link": "https://wa.link/i7rwku",
+        "registered_at": 1762861447
     }
-    
 ]
