@@ -7,14 +7,6 @@
         "2": {
             "team_label": "TEAM2",
             "referrals": 5
-        },
-        "3": {
-            "team_label": "TEAM3",
-            "referrals": 0
-        },
-        "4": {
-            "team_label": "TEAM4",
-            "referrals": 0
         }
     },
     "SOLO": {
