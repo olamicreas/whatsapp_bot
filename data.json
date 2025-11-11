@@ -68,5 +68,15 @@
         "team_label": "REF005",
         "team_link": "https://wa.link/l09mvf",
         "registered_at": 1762850197
+    },
+    {
+        "name": "Kunle",
+        "ref_id": "kunle",
+        "registration_type": "solo",
+        "assigned_number": 1,
+        "team_number": null,
+        "team_label": "REF001",
+        "team_link": "https://wa.link/b6kecz",
+        "registered_at": 1762858470
     }
 ]
