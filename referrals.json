@@ -29,6 +29,10 @@
         "REF005": {
             "team_label": "REF005",
             "referrals": 1
+        },
+        "REF006": {
+            "team_label": "REF006",
+            "referrals": 0
         }
     }
 }
