@@ -7,7 +7,6 @@ import re
 import base64
 import requests
 from datetime import datetime, timedelta
-from urllib.parse import quote
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -38,10 +37,6 @@ GITHUB_TOKEN = os.getenv("GITHUB_PAT")                # required for auto-push /
 GITHUB_REPO = os.getenv("GITHUB_REPO", "olamicreas/whatsapp_bot")  # owner/repo
 GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "master")    # branch to commit to
 
-# Contest end date: set CONTEST_END_ISO (ISO format) or CONTEST_LENGTH_DAYS (int)
-CONTEST_END_ISO = os.getenv("CONTEST_END_ISO")
-CONTEST_LENGTH_DAYS = int(os.getenv("CONTEST_LENGTH_DAYS", "30"))
-
 # ---------------------- Team links (WhatsApp) ----------------------
 TEAM_LINKS = {
     1: "https://wa.link/0a7pj3",
@@ -51,23 +46,38 @@ TEAM_LINKS = {
     5: "https://wa.link/xfq5gn"
 }
 
-# Base SOLO_LINKS (existing ones)
 SOLO_LINKS = {
     1: "https://wa.link/b6kecz",  # Ref 001
     2: "https://wa.link/stv0mr",  # Ref 002
     3: "https://wa.link/yup4kc",  # Ref 003 / Mr Heep
     4: "https://wa.link/ze4vj4",  # Ref 004
-    5: "https://wa.link/109mvf"   # Ref 005
+    5: "https://wa.link/109mvf",  # Ref 005
+
+    # Added REF006 -> REF025 (direct wa.me links to +2347010528330 with prefilled message)
+    6:  "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20006%2E%20my%20name%20is",
+    7:  "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20007%2E%20my%20name%20is",
+    8:  "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20008%2E%20my%20name%20is",
+    9:  "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20009%2E%20my%20name%20is",
+    10: "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20010%2E%20my%20name%20is",
+    11: "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20011%2E%20my%20name%20is",
+    12: "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20012%2E%20my%20name%20is",
+    13: "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20013%2E%20my%20name%20is",
+    14: "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20014%2E%20my%20name%20is",
+    15: "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20015%2E%20my%20name%20is",
+    16: "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20016%2E%20my%20name%20is",
+    17: "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20017%2E%20my%20name%20is",
+    18: "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20018%2E%20my%20name%20is",
+    19: "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20019%2E%20my%20name%20is",
+    20: "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20020%2E%20my%20name%20is",
+    21: "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20021%2E%20my%20name%20is",
+    22: "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20022%2E%20my%20name%20is",
+    23: "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20023%2E%20my%20name%20is",
+    24: "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20024%2E%20my%20name%20is",
+    25: "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20025%2E%20my%20name%20is",
 }
 
-# We'll extend SOLO_LINKS programmatically with REF006..REF025 using the same phone/message pattern.
-SOLO_PHONE = "2347010528330"  # target WhatsApp number for the generated links
-SOLO_START = 6
-SOLO_END = 25  # inclusive
-
-# ---------------------- Constants ----------------------
 TEAMS_PER_GROUP = 5
-SOLO_COUNT = 5
+SOLO_COUNT = 25  # expanded to cover new solo links
 
 # ---------------------- Utility helpers ----------------------
 def safe_int(x, default=0):
@@ -83,18 +93,6 @@ def safe_int(x, default=0):
             return int(str(x).strip() or 0)
         except Exception:
             return default
-
-# generate & merge extra SOLO links (doesn't create a separate list)
-def _extend_solo_links(start=SOLO_START, end=SOLO_END, phone=SOLO_PHONE):
-    for i in range(start, end + 1):
-        if i in SOLO_LINKS:
-            continue
-        ref = f"{i:03d}"
-        text = f"hello mr heep, i am from ref {ref}. my name is"
-        url = f"https://wa.me/{phone}?text={quote(text)}"
-        SOLO_LINKS[i] = url
-
-_extend_solo_links()
 
 # ---------------------- GitHub helpers ----------------------
 def _github_api_headers():
@@ -131,8 +129,10 @@ def _github_get_file_content(repo, path, branch=None):
                 data = r.json()
                 content_b64 = data.get("content", "")
                 if content_b64:
+                    # GH API returns content with newlines; base64 decode robustly
                     payload = "".join(content_b64.splitlines())
                     return base64.b64decode(payload)
+            # try next branch if 404 or other
         except Exception as e:
             app.logger.debug(f"[GITHUB] fetch {path}@{b} failed: {e}")
             continue
@@ -285,7 +285,6 @@ def assign_link(reg_type):
     elif reg_type == "solo":
         users = [u for u in load_json(DATA_FILE, []) if (u.get("registration_type") or "").strip().lower() == "solo"]
         solo_number = (len(users) % SOLO_COUNT) + 1
-        # if generated range goes beyond SOLO_COUNT, we still support generated links in SOLO_LINKS
         return solo_number, SOLO_LINKS.get(solo_number)
     else:
         return 1, TEAM_LINKS.get(1)
@@ -373,12 +372,13 @@ def fetch_contacts_and_update():
             if regt != "team":
                 continue  # skip solo users for team counts
             group = (u.get("group") or "ALL").strip()
+            # prefer explicit team_number, fallback to assigned_number, else 1
             team_num = safe_int(u.get("team_number") or u.get("assigned_number") or 1)
             groups.setdefault(group, {})
             groups[group].setdefault(team_num, {"team_label": f"TEAM{team_num}", "count": 0})
 
         # SOLO refs
-        SOLO_MAX = max(SOLO_END, SOLO_COUNT)
+        SOLO_MAX = SOLO_COUNT
         solo_refs = {i: {"ref_label": f"REF{str(i).zfill(3)}", "count": 0} for i in range(1, SOLO_MAX + 1)}
 
         # Local helper for punctuation-tolerant team detection
@@ -622,7 +622,6 @@ def progress(ref_id):
     raw_group_data = referrals.get(group_key, referrals.get("ALL", {}))
     group_data = {str(k): v for k, v in (raw_group_data or {}).items()}
 
-    # determine team / solo info
     if reg_type == "solo":
         solo_map = referrals.get("SOLO", {}) or {}
         candidates = []
@@ -654,11 +653,9 @@ def progress(ref_id):
             }
 
         team_info["referrals"] = safe_int(team_info.get("referrals", 0))
-        # solo goal remains 1,000
         referral_goal = 1000
 
     else:
-        # TEAM path
         team_number = user.get("team_number") if user.get("team_number") is not None else user.get("assigned_number")
         try:
             team_number = int(team_number)
@@ -667,17 +664,7 @@ def progress(ref_id):
         team_key = str(team_number)
         team_info = group_data.get(team_key, {"team_label": user.get("team_label", f"TEAM{team_number}"), "referrals": 0})
         team_info["referrals"] = safe_int(team_info.get("referrals", 0))
-
-        # --- special per-team goal logic ---
-        # default team goal:
-        default_team_goal = 10000
-        # override for specific teams:
-        TEAM_GOALS = {
-            2: 100000,   # Team 2 has 100k goal
-            # add more overrides here if needed, e.g. 3: 50000
-        }
-        referral_goal = TEAM_GOALS.get(team_number, default_team_goal)
-        # -------------------------------------
+        referral_goal = 10000
 
     try:
         normalized_group_teams = {
@@ -688,15 +675,17 @@ def progress(ref_id):
     except Exception:
         group_teams = group_data
 
-    # compute contest_end_iso automatically from yesterday + 30 days
-    # contest started yesterday and runs for 30 days
-    try:
-        yesterday = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
-        contest_end = yesterday + timedelta(days=30)
-        contest_end_iso = contest_end.isoformat()
-    except Exception:
-        # graceful fallback: 30 days from now
-        contest_end_iso = (datetime.utcnow() + timedelta(days=30)).isoformat()
+    # -------------------- NEW: contest end iso for countdown --------------------
+    # You can set environment variable CONTEST_END_ISO to an ISO datetime string, e.g. 2025-12-31T23:59:59Z
+    # or set CONTEST_DAYS to a number of days from today (default 30)
+    contest_end_iso = os.getenv("CONTEST_END_ISO")
+    if not contest_end_iso:
+        try:
+            days_from_now = int(os.getenv("CONTEST_DAYS", "30"))
+        except Exception:
+            days_from_now = 30
+        contest_end_iso = (datetime.utcnow() + timedelta(days=days_from_now)).isoformat() + "Z"
+    # -----------------------------------------------------------------------
 
     return render_template(
         "progress.html",
@@ -709,7 +698,7 @@ def progress(ref_id):
         SOLO_LINKS=SOLO_LINKS,
         contest_end_iso=contest_end_iso
     )
-    
+
 @app.route("/public", methods=["POST", "GET"])
 def public():
     # Always fetch fresh data first (best-effort)
@@ -743,12 +732,13 @@ def public():
             sorted_refs[group] = teams
 
     # render leaderboard template
-    return render_template(
+    return redirect(url_for("index"))
+    """return render_template(
         "leaderboard.html",
         all_refs=sorted_refs,
         TEAM_LINKS=TEAM_LINKS,
         SOLO_LINKS=SOLO_LINKS
-    )
+    )"""
 
 @app.route("/auth")
 def auth():
@@ -816,7 +806,7 @@ def daily_progress():
         padded_days.append({"date": None, "counts": {}})
 
     # helper: robust int conversion (safe to re-declare here)
-    def safe_int_local(v):
+    def safe_int(v):
         try:
             return int(v)
         except Exception:
@@ -856,7 +846,7 @@ def daily_progress():
         for d in padded_days:
             c = 0
             if d.get("counts") and label in d["counts"]:
-                c = safe_int_local(d["counts"][label])
+                c = safe_int(d["counts"][label])
             day_counts.append(c)
             total += c
         rows.append({"label": label, "name": label_to_name.get(label, label), "day_counts": day_counts, "total": total})
@@ -869,12 +859,13 @@ def daily_progress():
     totals_sorted = sorted(rows, key=lambda r: r["total"], reverse=True)
     day_dates = [d.get("date") for d in padded_days]
 
-    # compute daily_totals (Day 1..30 totals) and overall_total
+    # ----- NEW: compute daily_totals (Day 1..30 totals) and overall_total -----
     daily_totals = []
     for i in range(30):
         day_sum = sum((row["day_counts"][i] if i < len(row["day_counts"]) else 0) for row in rows)
         daily_totals.append(day_sum)
     overall_total = sum(daily_totals)
+    # -------------------------------------------------------------------------
 
     return render_template(
         "daily_progress.html",
@@ -898,7 +889,6 @@ def daily_progress_snapshot():
 
 # ---------------------- Start ----------------------
 if __name__ == "__main__":
-    # start background updater (daemon)
     threading.Thread(target=background_updater, daemon=True).start()
     app.logger.info("✅ Flask app running with GitHub-backed JSON and Google Contacts sync.")
     app.run(debug=True)
