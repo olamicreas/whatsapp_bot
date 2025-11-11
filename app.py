@@ -696,7 +696,7 @@ def public():
             sorted_refs[group] = teams
 
     # render leaderboard template
-    return redirect("index")
+    return redirect(url_for("index"))
     """return render_template(
         "leaderboard.html",
         all_refs=sorted_refs,
