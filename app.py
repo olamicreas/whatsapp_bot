@@ -680,16 +680,41 @@ def progress(ref_id):
     except Exception:
         group_teams = group_data
 
-    # -------------------- NEW: contest end iso for countdown --------------------
-    # You can set environment variable CONTEST_END_ISO to an ISO datetime string, e.g. 2025-12-31T23:59:59Z
-    # or set CONTEST_DAYS to a number of days from today (default 30)
-    contest_end_iso = os.getenv("CONTEST_END_ISO")
+    # -------------------- NEW: contest start/end handling for countdown --------------------
+    # Priority:
+    # 1) Use CONTEST_END_ISO if provided
+    # 2) Else, if CONTEST_START_ISO provided -> end = start + CONTEST_DAYS
+    # 3) Else, if CONTEST_STARTED_YESTERDAY env var set (1/true/yes) -> start = now - 1 day
+    # 4) Else start = now
+    # In cases 2-4 we compute end = start + CONTEST_DAYS days.
+    contest_end_iso = os.getenv("CONTEST_END_ISO", "").strip() or None
     if not contest_end_iso:
+        # how many days the contest lasts (default 30)
         try:
             days_from_now = int(os.getenv("CONTEST_DAYS", "30"))
         except Exception:
             days_from_now = 30
-        contest_end_iso = (datetime.utcnow() + timedelta(days=days_from_now)).isoformat() + "Z"
+
+        contest_start_iso_env = os.getenv("CONTEST_START_ISO", "").strip() or None
+        contest_started_yesterday = str(os.getenv("CONTEST_STARTED_YESTERDAY", "")).strip().lower() in ("1", "true", "yes")
+
+        # determine start datetime (UTC)
+        start_dt = None
+        if contest_start_iso_env:
+            try:
+                # tolerate trailing Z
+                start_dt = datetime.fromisoformat(contest_start_iso_env.replace("Z", ""))
+            except Exception:
+                start_dt = None
+
+        if start_dt is None:
+            if contest_started_yesterday:
+                start_dt = datetime.utcnow() - timedelta(days=1)
+            else:
+                start_dt = datetime.utcnow()
+
+        end_dt = start_dt + timedelta(days=days_from_now)
+        contest_end_iso = end_dt.isoformat() + "Z"
     # -----------------------------------------------------------------------
 
     return render_template(
