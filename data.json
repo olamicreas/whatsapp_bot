@@ -58,5 +58,15 @@
         "team_label": "REF004",
         "team_link": "https://wa.link/ze4vj4",
         "registered_at": 1762782799
+    },
+    {
+        "name": "FAITH",
+        "ref_id": "faith",
+        "registration_type": "solo",
+        "assigned_number": 5,
+        "team_number": null,
+        "team_label": "REF005",
+        "team_link": "https://wa.link/109mvf",
+        "registered_at": 1762850197
     }
 ]
