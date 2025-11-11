@@ -691,9 +691,9 @@ def progress(ref_id):
     if not contest_end_iso:
         # how many days the contest lasts (default 30)
         try:
-            days_from_now = int(os.getenv("CONTEST_DAYS", "30"))
+            days_from_now = int(os.getenv("CONTEST_DAYS", "29"))
         except Exception:
-            days_from_now = 30
+            days_from_now = 29
 
         contest_start_iso_env = os.getenv("CONTEST_START_ISO", "").strip() or None
         contest_started_yesterday = str(os.getenv("CONTEST_STARTED_YESTERDAY", "")).strip().lower() in ("1", "true", "yes")
