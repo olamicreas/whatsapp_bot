@@ -2,15 +2,15 @@
     "ALL": {
         "1": {
             "team_label": "TEAM1",
-            "referrals": 50
+            "referrals": 51
         },
         "2": {
             "team_label": "TEAM2",
-            "referrals": 182
+            "referrals": 183
         },
         "3": {
             "team_label": "TEAM3",
-            "referrals": 51
+            "referrals": 53
         }
     },
     "SOLO": {
@@ -28,7 +28,7 @@
         },
         "REF004": {
             "team_label": "REF004",
-            "referrals": 64
+            "referrals": 65
         },
         "REF005": {
             "team_label": "REF005",
@@ -52,7 +52,7 @@
         },
         "REF010": {
             "team_label": "REF010",
-            "referrals": 41
+            "referrals": 42
         },
         "REF011": {
             "team_label": "REF011",
