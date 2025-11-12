@@ -23,7 +23,16 @@ DAILY_FILE = os.getenv("DAILY_FILE", "daily_refs.json")  # daily snapshots stora
 
 # prefer Render secret file path if present, else local credentials.json
 CRED_FILE = "/etc/secrets/credentials.json" if os.path.exists("/etc/secrets/credentials.json") else "credentials.json"
-TOKEN_FILE = "token.json"
+
+# ---------------------- TOKEN FILE: use Render disk when available ----------------------
+# Render disk mount: /var/data (you told me you mounted it)
+RENDER_TOKEN_DIR = "/var/data"
+if os.path.isdir(RENDER_TOKEN_DIR):
+    TOKEN_FILE = os.path.join(RENDER_TOKEN_DIR, "token.json")
+else:
+    TOKEN_FILE = "token.json"
+# ------------------------------------------------------------------------------
+
 SCOPES = ["https://www.googleapis.com/auth/contacts.readonly"]
 
 UPDATE_INTERVAL = int(os.getenv("UPDATE_INTERVAL", 300))  # seconds
@@ -255,17 +264,40 @@ def save_json(path, data, push_to_github=True):
             return {"error": str(e)}
     return {"saved_local": True}
 
-# ---------------------- Google credentials ----------------------
+# ---------------------- Google credentials (UPDATED to use Render disk) ----------------------
 def get_credentials():
+    """
+    Read credentials from TOKEN_FILE (which will be on /var/data/token.json on Render if available).
+    If credentials are expired and refresh_token is present, refresh and save back to TOKEN_FILE.
+    Returns google.oauth2.credentials.Credentials or None.
+    """
     if os.path.exists(TOKEN_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+        try:
+            creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+        except Exception as e:
+            app.logger.warning("Failed to load credentials from %s: %s", TOKEN_FILE, e)
+            return None
+
         if creds and creds.valid:
             return creds
+
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            with open(TOKEN_FILE, "w") as token:
-                token.write(creds.to_json())
-            return creds
+            try:
+                creds.refresh(Request())
+                # ensure token directory exists before writing
+                token_dir = os.path.dirname(TOKEN_FILE)
+                if token_dir and not os.path.exists(token_dir):
+                    try:
+                        os.makedirs(token_dir, exist_ok=True)
+                    except Exception as ee:
+                        app.logger.warning("Failed to create token dir %s: %s", token_dir, ee)
+                with open(TOKEN_FILE, "w") as token:
+                    token.write(creds.to_json())
+                app.logger.info("Refreshed Google credentials and saved to %s", TOKEN_FILE)
+                return creds
+            except Exception as e:
+                app.logger.error("Failed to refresh credentials: %s", e)
+                return None
     return None
 
 def normalize_ref_id(s):
@@ -766,8 +798,24 @@ def oauth2callback():
     flow.redirect_uri = url_for("oauth2callback", _external=True)
     flow.fetch_token(authorization_response=request.url)
     creds = flow.credentials
-    with open(TOKEN_FILE, "w") as token:
-        token.write(creds.to_json())
+
+    # Ensure token directory exists (use Render disk if available)
+    token_dir = os.path.dirname(TOKEN_FILE)
+    if token_dir and not os.path.exists(token_dir):
+        try:
+            os.makedirs(token_dir, exist_ok=True)
+        except Exception as e:
+            app.logger.warning("Failed to create token directory %s: %s", token_dir, e)
+
+    # persist credentials to TOKEN_FILE (on /var/data/token.json when available)
+    try:
+        with open(TOKEN_FILE, "w") as token:
+            token.write(creds.to_json())
+        app.logger.info("Saved credentials to %s", TOKEN_FILE)
+    except Exception as e:
+        app.logger.error("Failed to write token to %s: %s", TOKEN_FILE, e)
+
+    # run an initial sync immediately after successful auth
     fetch_contacts_and_update()
     return redirect(url_for("public"))
 
