@@ -15,7 +15,7 @@
   </div>
 
   <div class="overflow-auto border rounded">
-    <table class="w-full min-w-max table-auto">
+    <table id="daily-table" class="w-full min-w-max table-auto">
       <thead class="bg-gray-50">
         <tr>
           <th class="p-2 text-left">Label</th>
@@ -35,27 +35,10 @@
         </tr>
       </thead>
 
-      <tbody>
-        {% for row in rows %}
-        <tr class="border-t">
-          <td class="p-2 text-sm font-medium">{{ row.label }}</td>
-          <td class="p-2 text-sm text-gray-600">{{ row.name }}</td>
-
-          {% for cnt in row.day_counts %}
-            <td class="p-2 text-right">{{ cnt }}</td>
-          {% endfor %}
-
-          <td class="p-2 text-right font-semibold">{{ row.total }}</td>
-        </tr>
-        {% endfor %}
-
-        {# --- NEW SECTION: Daily Totals row --- #}
-        <tr class="border-t bg-gray-100 font-semibold">
-          <td class="p-2 text-sm text-gray-800" colspan="2">Daily Referral Totals</td>
-          {% for day_sum in daily_totals %}
-            <td class="p-2 text-right" style="color:black;">{{ day_sum }}</td>
-          {% endfor %}
-          <td class="p-2 text-right">{{ overall_total }}</td>
+      <tbody id="daily-body">
+        <!-- rows will be rendered client-side (see script below) -->
+        <tr class="text-center">
+          <td class="p-6 text-gray-400" colspan="32">Loading daily deltas…</td>
         </tr>
       </tbody>
     </table>
@@ -64,7 +47,7 @@
   <div class="mt-6">
     <h3 class="text-lg font-semibold mb-2">Accumulated Totals (All recorded days)</h3>
     <div class="overflow-auto border rounded">
-      <table class="w-full min-w-max table-auto">
+      <table id="accum-table" class="w-full min-w-max table-auto">
         <thead class="bg-gray-50">
           <tr>
             <th class="p-2 text-left">Label</th>
@@ -72,14 +55,11 @@
             <th class="p-2 text-right">Total</th>
           </tr>
         </thead>
-        <tbody>
-          {% for row in totals_sorted %}
-          <tr class="border-t">
-            <td class="p-2">{{ row.label }}</td>
-            <td class="p-2 text-gray-600">{{ row.name }}</td>
-            <td class="p-2 text-right font-semibold">{{ row.total }}</td>
+        <tbody id="accum-body">
+          <!-- totals injected by JS -->
+          <tr class="text-center">
+            <td class="p-6 text-gray-400" colspan="3">Loading totals…</td>
           </tr>
-          {% endfor %}
         </tbody>
       </table>
     </div>
@@ -90,4 +70,174 @@
     <p class="mt-1">After 30 days, use the Accumulated Totals table to see the full sum across recorded days.</p>
   </div>
 </div>
+
+<script>
+/*
+Client-side renderer for daily deltas and totals.
+
+Server supplies:
+ - rows      : array of { label, name, day_counts:[30 cumulative-or-daily values], total }
+ - day_dates : array length 30 of date strings or null
+
+This script computes per-day DELTAS (defensive):
+  delta[0] = day_counts[0]
+  delta[i] = max(0, day_counts[i] - day_counts[i-1])  (clamped to 0)
+and then renders the grid and accumulated totals.
+*/
+
+const SERVER_ROWS = {{ rows | tojson }};
+const DAY_DATES = {{ day_dates | tojson }};
+
+function toSafeInt(v){
+  if (v === null || v === undefined) return 0;
+  if (typeof v === 'number') {
+    if (!isFinite(v) || isNaN(v)) return 0;
+    return Math.trunc(v);
+  }
+  // strip commas, whitespace
+  const s = String(v).replace(/[, ]+/g,'').trim();
+  const n = Number(s);
+  if (!isFinite(n) || isNaN(n)) return 0;
+  return Math.trunc(n);
+}
+
+function computeDeltas(day_counts){
+  // day_counts may be fewer than 30; treat missing as 0
+  const deltas = [];
+  for (let i = 0; i < 30; i++){
+    const cur = toSafeInt(day_counts && day_counts[i] != null ? day_counts[i] : 0);
+    if (i === 0){
+      deltas.push(cur);
+    } else {
+      const prev = toSafeInt(day_counts && day_counts[i-1] != null ? day_counts[i-1] : 0);
+      let d = cur - prev;
+      if (!isFinite(d) || isNaN(d)) d = 0;
+      if (d < 0) d = 0; // defensive: clamp negative to 0
+      deltas.push(d);
+    }
+  }
+  return deltas;
+}
+
+(function renderDailyTables(){
+  const tbody = document.getElementById('daily-body');
+  const accumBody = document.getElementById('accum-body');
+
+  // prepare computed rows (deltas + name/label + total)
+  const computed = (Array.isArray(SERVER_ROWS) ? SERVER_ROWS : []).map(r => {
+    const counts = Array.isArray(r.day_counts) ? r.day_counts : [];
+    const deltas = computeDeltas(counts);
+    const total = deltas.reduce((s,n) => s + toSafeInt(n), 0);
+    return {
+      label: r.label || '',
+      name: r.name || r.label || '',
+      deltas: deltas,
+      total: total
+    };
+  });
+
+  // compute daily_totals and overall_total
+  const daily_totals = new Array(30).fill(0);
+  for (let i = 0; i < 30; i++){
+    for (const row of computed){
+      daily_totals[i] += toSafeInt(row.deltas[i]);
+    }
+  }
+  const overall_total = daily_totals.reduce((a,b) => a + b, 0);
+
+  // determine latest index (use last non-null day in DAY_DATES if any)
+  let latestIndex = 0;
+  if (Array.isArray(DAY_DATES)) {
+    const filled = DAY_DATES.map((d, idx) => d ? idx : -1).filter(x => x >= 0);
+    if (filled.length) latestIndex = Math.max(...filled);
+  }
+  latestIndex = Math.max(0, latestIndex);
+
+  // sort rows by latest day's delta desc
+  computed.sort((a,b) => (b.deltas[latestIndex] || 0) - (a.deltas[latestIndex] || 0));
+
+  // render daily-body
+  tbody.innerHTML = ''; // clear
+  for (const row of computed){
+    const tr = document.createElement('tr');
+    tr.className = 'border-t';
+
+    const tdLabel = document.createElement('td');
+    tdLabel.className = 'p-2 text-sm font-medium';
+    tdLabel.textContent = row.label;
+    tr.appendChild(tdLabel);
+
+    const tdName = document.createElement('td');
+    tdName.className = 'p-2 text-sm text-gray-600';
+    tdName.textContent = row.name;
+    tr.appendChild(tdName);
+
+    // day cells
+    for (let i = 0; i < 30; i++){
+      const td = document.createElement('td');
+      td.className = 'p-2 text-right';
+      td.textContent = row.deltas[i] != null ? row.deltas[i] : 0;
+      tr.appendChild(td);
+    }
+
+    const tdTotal = document.createElement('td');
+    tdTotal.className = 'p-2 text-right font-semibold';
+    tdTotal.textContent = row.total;
+    tr.appendChild(tdTotal);
+
+    tbody.appendChild(tr);
+  }
+
+  // append daily totals footer row
+  const totalsRow = document.createElement('tr');
+  totalsRow.className = 'border-t bg-gray-100 font-semibold';
+  const totLabel = document.createElement('td');
+  totLabel.className = 'p-2 text-sm text-gray-800';
+  totLabel.setAttribute('colspan','2');
+  totLabel.textContent = 'Daily Referral Totals';
+  totalsRow.appendChild(totLabel);
+
+  for (let i = 0; i < 30; i++){
+    const td = document.createElement('td');
+    td.className = 'p-2 text-right';
+    td.style.color = 'black';
+    td.textContent = daily_totals[i];
+    totalsRow.appendChild(td);
+  }
+  const tdOverall = document.createElement('td');
+  tdOverall.className = 'p-2 text-right';
+  tdOverall.textContent = overall_total;
+  totalsRow.appendChild(tdOverall);
+  tbody.appendChild(totalsRow);
+
+  // render accumulated totals table
+  accumBody.innerHTML = '';
+  const totalsSorted = computed.slice().sort((a,b) => b.total - a.total);
+  if (totalsSorted.length === 0) {
+    const tr = document.createElement('tr');
+    tr.className = 'text-center';
+    const td = document.createElement('td');
+    td.className = 'p-6 text-gray-400';
+    td.setAttribute('colspan','3');
+    td.textContent = 'No data';
+    tr.appendChild(td);
+    accumBody.appendChild(tr);
+  } else {
+    for (const r of totalsSorted){
+      const tr = document.createElement('tr');
+      tr.className = 'border-t';
+      const a = document.createElement('td'); a.className = 'p-2'; a.textContent = r.label;
+      const b = document.createElement('td'); b.className = 'p-2 text-gray-600'; b.textContent = r.name;
+      const c = document.createElement('td'); c.className = 'p-2 text-right font-semibold'; c.textContent = r.total;
+      tr.appendChild(a); tr.appendChild(b); tr.appendChild(c);
+      accumBody.appendChild(tr);
+    }
+  }
+
+  // expose totals on window for debugging if needed
+  window.__daily_totals = daily_totals;
+  window.__overall_total = overall_total;
+
+})();
+</script>
 {% endblock %}
