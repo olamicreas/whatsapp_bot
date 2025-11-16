@@ -158,5 +158,15 @@
         "team_label": "REF013",
         "team_link": "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20013%2E%20my%20name%20is",
         "registered_at": 1763197492
+    },
+    {
+        "name": "Soteria",
+        "ref_id": "soteria",
+        "registration_type": "solo",
+        "assigned_number": 14,
+        "team_number": null,
+        "team_label": "REF014",
+        "team_link": "https://wa.me/2347010528330?text=hello%20mr%20heep%2C%20i%20am%20from%20ref%20014%2E%20my%20name%20is",
+        "registered_at": 1763291779
     }
 ]
