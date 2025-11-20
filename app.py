@@ -593,15 +593,17 @@ def build_today_snapshot():
     return {"date": date_str, "counts": counts}
 
 
-def build_missing_yesterday_snapshot():
+
+
+def build_yesterday_snapshot_from_actual_counts():
     """
-    Build a snapshot for yesterday with zero referrals.
+    Build a snapshot for yesterday using the actual referral counts in REF_FILE.
     """
-    refs = load_json(REF_FILE, {})  # load current REF_FILE for structure
+    refs = load_json(REF_FILE, {})  # load current REF_FILE for counts
     counts = {}
 
-    # Teams: use ALL group if exists, else aggregate structure from current REF_FILE
     if isinstance(refs, dict):
+        # Teams: prefer ALL group if present
         if "ALL" in refs and isinstance(refs["ALL"], dict):
             source = refs["ALL"]
             for k, v in source.items():
@@ -609,9 +611,9 @@ def build_missing_yesterday_snapshot():
                     label = f"TEAM{int(k)}"
                 except Exception:
                     label = str((v or {}).get("team_label") or f"TEAM{str(k)}")
-                counts[label] = 0
+                counts[label] = safe_int((v or {}).get("referrals", 0))
         else:
-            # aggregate teams from any group keys
+            # Aggregate from all groups
             for g, teams in refs.items():
                 if g == "SOLO" or not isinstance(teams, dict):
                     continue
@@ -620,13 +622,13 @@ def build_missing_yesterday_snapshot():
                         label = f"TEAM{int(k)}"
                     except Exception:
                         label = str((v or {}).get("team_label") or f"TEAM{str(k)}")
-                    counts[label] = 0
+                    counts[label] = counts.get(label, 0) + safe_int((v or {}).get("referrals", 0))
 
         # Solos
         solo = refs.get("SOLO", {}) or {}
         for k, v in solo.items():
             label = str((v or {}).get("team_label") or k)
-            counts[label] = 0
+            counts[label] = counts.get(label, 0) + safe_int((v or {}).get("referrals", 0))
 
     # Ensure teams known in DATA_FILE are present
     users = load_json(DATA_FILE, []) or []
@@ -638,11 +640,10 @@ def build_missing_yesterday_snapshot():
     yesterday_str = (datetime.utcnow().date() - timedelta(days=1)).isoformat()
     snapshot = {"date": yesterday_str, "counts": counts}
 
-    # Save snapshot for yesterday
+    # Save snapshot
     save_json(f"snapshot_{yesterday_str}.json", snapshot)
-    app.logger.info(f"[SNAPSHOT] Missing snapshot for {yesterday_str} created with 0 referrals.")
+    app.logger.info(f"[SNAPSHOT] Snapshot for {yesterday_str} created from actual counts.")
     return snapshot
-
 
 def read_daily_file():
     return load_json(DAILY_FILE, {"days": []})
