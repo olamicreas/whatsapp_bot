@@ -973,11 +973,11 @@ def daily_progress():
         daily = read_daily_file()
         days = daily.get("days", [])
 
-    padded_days = list(days)[:]
+    # keep a copy and pad to 30
+    padded_days = list(days)
     while len(padded_days) < 30:
         padded_days.append({"date": None, "counts": {}})
 
-    # helper: robust int conversion (safe to re-declare here)
     def safe_int(v):
         try:
             return int(v)
@@ -987,19 +987,12 @@ def daily_progress():
             except Exception:
                 return 0
 
-    refs = load_json(REF_FILE, {})
+    # Build labels_set only from daily counts
     labels_set = set()
-    for k in (refs.get("ALL") or {}).keys():
-        try:
-            labels_set.add(f"TEAM{int(k)}")
-        except Exception:
-            labels_set.add(f"TEAM{str(k)}")
-    for k in (refs.get("SOLO") or {}).keys():
-        labels_set.add(str(k))
     for d in days:
-        for label in d.get("counts", {}).keys():
-            labels_set.add(str(label))
+        labels_set.update(d.get("counts", {}).keys())
 
+    # Load users
     users = load_json(DATA_FILE, []) or []
     label_to_name = {}
     for u in users:
@@ -1010,34 +1003,31 @@ def daily_progress():
         if tn is not None:
             label_to_name[f"TEAM{int(tn)}"] = label_to_name.get(f"TEAM{int(tn)}", f"Team {tn}")
 
-    # Build per-label rows (Day 1..30 counts + total)
+    # Ensure REF labels have names
+    for label in labels_set:
+        if label.startswith("REF") and label not in label_to_name:
+            label_to_name[label] = label
+
+    # Build rows
     rows = []
     for label in sorted(labels_set):
         day_counts = []
         total = 0
         for d in padded_days:
-            c = 0
-            if d.get("counts") and label in d["counts"]:
-                c = safe_int(d["counts"][label])
+            c = safe_int(d.get("counts", {}).get(label, 0))
             day_counts.append(c)
             total += c
         rows.append({"label": label, "name": label_to_name.get(label, label), "day_counts": day_counts, "total": total})
 
-    # latest recorded day index (0-based)
-    latest_index = max(0, len(days) - 1)
+    # latest non-empty day index
+    latest_index = max(i for i, d in enumerate(days) if d.get("counts")) if days else 0
 
-    # sort rows for display by that latest day
     rows_sorted_by_latest = sorted(rows, key=lambda r: r["day_counts"][latest_index], reverse=True)
     totals_sorted = sorted(rows, key=lambda r: r["total"], reverse=True)
     day_dates = [d.get("date") for d in padded_days]
 
-    # ----- NEW: compute daily_totals (Day 1..30 totals) and overall_total -----
-    daily_totals = []
-    for i in range(30):
-        day_sum = sum((row["day_counts"][i] if i < len(row["day_counts"]) else 0) for row in rows)
-        daily_totals.append(day_sum)
+    daily_totals = [sum(row["day_counts"][i] for row in rows) for i in range(30)]
     overall_total = sum(daily_totals)
-    # -------------------------------------------------------------------------
 
     return render_template(
         "daily_progress.html",
@@ -1048,7 +1038,6 @@ def daily_progress():
         daily_totals=daily_totals,
         overall_total=overall_total
     )
-
     
 @app.route("/daily-progress/snapshot", methods=["POST"])
 def daily_progress_snapshot():
