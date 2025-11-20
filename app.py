@@ -592,6 +592,7 @@ def build_today_snapshot():
     date_str = datetime.utcnow().date().isoformat()
     return {"date": date_str, "counts": counts}
 
+
 def build_missing_yesterday_snapshot():
     """
     Build a snapshot for yesterday with zero referrals.
@@ -641,6 +642,7 @@ def build_missing_yesterday_snapshot():
     save_json(f"snapshot_{yesterday_str}.json", snapshot)
     app.logger.info(f"[SNAPSHOT] Missing snapshot for {yesterday_str} created with 0 referrals.")
     return snapshot
+
 
 def read_daily_file():
     return load_json(DAILY_FILE, {"days": []})
