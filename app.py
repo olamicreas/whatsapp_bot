@@ -592,6 +592,56 @@ def build_today_snapshot():
     date_str = datetime.utcnow().date().isoformat()
     return {"date": date_str, "counts": counts}
 
+def build_missing_yesterday_snapshot():
+    """
+    Build a snapshot for yesterday with zero referrals.
+    """
+    refs = load_json(REF_FILE, {})  # load current REF_FILE for structure
+    counts = {}
+
+    # Teams: use ALL group if exists, else aggregate structure from current REF_FILE
+    if isinstance(refs, dict):
+        if "ALL" in refs and isinstance(refs["ALL"], dict):
+            source = refs["ALL"]
+            for k, v in source.items():
+                try:
+                    label = f"TEAM{int(k)}"
+                except Exception:
+                    label = str((v or {}).get("team_label") or f"TEAM{str(k)}")
+                counts[label] = 0
+        else:
+            # aggregate teams from any group keys
+            for g, teams in refs.items():
+                if g == "SOLO" or not isinstance(teams, dict):
+                    continue
+                for k, v in teams.items():
+                    try:
+                        label = f"TEAM{int(k)}"
+                    except Exception:
+                        label = str((v or {}).get("team_label") or f"TEAM{str(k)}")
+                    counts[label] = 0
+
+        # Solos
+        solo = refs.get("SOLO", {}) or {}
+        for k, v in solo.items():
+            label = str((v or {}).get("team_label") or k)
+            counts[label] = 0
+
+    # Ensure teams known in DATA_FILE are present
+    users = load_json(DATA_FILE, []) or []
+    for u in users:
+        tl = (u.get("team_label") or "").strip()
+        if tl:
+            counts.setdefault(tl, 0)
+
+    yesterday_str = (datetime.utcnow().date() - timedelta(days=1)).isoformat()
+    snapshot = {"date": yesterday_str, "counts": counts}
+
+    # Save snapshot for yesterday
+    save_json(f"snapshot_{yesterday_str}.json", snapshot)
+    app.logger.info(f"[SNAPSHOT] Missing snapshot for {yesterday_str} created with 0 referrals.")
+    return snapshot
+
 def read_daily_file():
     return load_json(DAILY_FILE, {"days": []})
 
