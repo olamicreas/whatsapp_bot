@@ -427,7 +427,6 @@ def contact_mentions_ref(contact, ref_index):
     combined_clean = re.sub(r"[^\w\s]", " ", combined)
     return bool(pat.search(combined_clean))
 
-# ---------------------- Sync & aggregation ----------------------
 def fetch_contacts_and_update():
     creds = get_credentials()
     if not creds:
@@ -452,7 +451,6 @@ def fetch_contacts_and_update():
             if regt != "team":
                 continue  # skip solo users for team counts
             group = (u.get("group") or "ALL").strip()
-            # prefer explicit team_number, fallback to assigned_number, else 1
             team_num = safe_int(u.get("team_number") or u.get("assigned_number") or 1)
             groups.setdefault(group, {})
             groups[group].setdefault(team_num, {"team_label": f"TEAM{team_num}", "count": 0})
@@ -479,6 +477,9 @@ def fetch_contacts_and_update():
 
         # Scan contacts
         for contact in connections:
+            # --- Print the full contact for inspection ---
+            print("CONTACT:", contact)  # <--- added line to print all contact data
+
             for group, teams in groups.items():
                 for team_num in list(teams.keys()):
                     if contact_mentions_team(contact, group, team_num) or contact_mentions_team_local(contact, team_num):
@@ -519,30 +520,6 @@ def fetch_contacts_and_update():
                 "team_label": info.get("ref_label", key),
                 "referrals": count
             }
-        # Scan contacts
-        for contact in connections:
-            # --- Print the full contact for inspection ---
-            print("CONTACT:", contact)  # <--- added line to print all contact data
-        
-            for group, teams in groups.items():
-                for team_num in list(teams.keys()):
-                    if contact_mentions_team(contact, group, team_num) or contact_mentions_team_local(contact, team_num):
-                        teams[team_num]["count"] = safe_int(teams[team_num].get("count")) + 1
-                        try:
-                            name = contact.get("names", [{"displayName": "Unknown"}])[0].get("displayName", "Unknown")
-                        except Exception:
-                            name = "Unknown"
-                        app.logger.debug(f"[MATCH] {name} counted for {group} TEAM{team_num}")
-        
-            # SOLO refs: REF001..REFNN
-            for i in range(1, SOLO_MAX + 1):
-                if contact_mentions_ref(contact, i):
-                    solo_refs[i]["count"] = safe_int(solo_refs[i].get("count")) + 1
-                    try:
-                        name = contact.get("names", [{"displayName": "Unknown"}])[0].get("displayName", "Unknown")
-                    except Exception:
-                        name = "Unknown"
-                    app.logger.debug(f"[MATCH] {name} counted for SOLO {solo_refs[i]['ref_label']}")   
 
         # Save locally and push to GitHub if configured
         save_json(REF_FILE, referrals, push_to_github=True)
@@ -552,7 +529,7 @@ def fetch_contacts_and_update():
     except Exception as e:
         app.logger.error(f"[ERROR] Failed to update referrals: {e}")
         return {"status": "error", "message": str(e)}
-
+        
 def background_updater():
     while True:
         fetch_contacts_and_update()
