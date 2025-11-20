@@ -19,7 +19,9 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "super_secret_key")
 # ---------------------- Config ----------------------
 DATA_FILE = "data.json"
 REF_FILE = "referrals.json"
-DAILY_FILE = os.getenv("DAILY_FILE", "daily_refs.json")  # daily snapshots storage
+RENDER_DATA_DIR = "/var/data"
+DAILY_FILE = os.path.join(RENDER_DATA_DIR, "daily_refs.json") if os.path.isdir(RENDER_DATA_DIR) else "daily_refs.json"
+app.logger.info("Using DAILY_FILE: %s", DAILY_FILE)
 
 # prefer Render secret file path if present, else local credentials.json
 CRED_FILE = "/etc/secrets/credentials.json" if os.path.exists("/etc/secrets/credentials.json") else "credentials.json"
@@ -291,10 +293,12 @@ def save_json(path, data, push_to_github=True):
 
     # If file is on Render disk (mounted dir), do not push to GitHub
     try:
-        render_dir = os.path.abspath(RENDER_TOKEN_DIR) if 'RENDER_TOKEN_DIR' in globals() else None
-        if render_dir and os.path.isabs(path) and os.path.abspath(path).startswith(render_dir):
+        
+        render_dirs = [RENDER_TOKEN_DIR, RENDER_DATA_DIR]  # consider both dirs
+        if any(os.path.isabs(path) and os.path.abspath(path).startswith(rd) for rd in render_dirs):
             app.logger.info("Saved %s locally on Render disk, skipping GitHub push.", path)
             return {"saved_local": True, "skipped_github": True}
+
     except Exception:
         pass
 
@@ -963,6 +967,7 @@ def migrate_team_links():
 # ---------------------- Daily snapshot display & snapshot endpoint ----------------------
 
 
+
 @app.route("/daily-progress", methods=["GET"])
 def daily_progress():
     daily = read_daily_file()
@@ -973,11 +978,11 @@ def daily_progress():
         daily = read_daily_file()
         days = daily.get("days", [])
 
-    # keep a copy and pad to 30
-    padded_days = list(days)
+    padded_days = list(days)[:]
     while len(padded_days) < 30:
         padded_days.append({"date": None, "counts": {}})
 
+    # helper: robust int conversion (safe to re-declare here)
     def safe_int(v):
         try:
             return int(v)
@@ -987,12 +992,19 @@ def daily_progress():
             except Exception:
                 return 0
 
-    # Build labels_set only from daily counts
+    refs = load_json(REF_FILE, {})
     labels_set = set()
+    for k in (refs.get("ALL") or {}).keys():
+        try:
+            labels_set.add(f"TEAM{int(k)}")
+        except Exception:
+            labels_set.add(f"TEAM{str(k)}")
+    for k in (refs.get("SOLO") or {}).keys():
+        labels_set.add(str(k))
     for d in days:
-        labels_set.update(d.get("counts", {}).keys())
+        for label in d.get("counts", {}).keys():
+            labels_set.add(str(label))
 
-    # Load users
     users = load_json(DATA_FILE, []) or []
     label_to_name = {}
     for u in users:
@@ -1003,31 +1015,34 @@ def daily_progress():
         if tn is not None:
             label_to_name[f"TEAM{int(tn)}"] = label_to_name.get(f"TEAM{int(tn)}", f"Team {tn}")
 
-    # Ensure REF labels have names
-    for label in labels_set:
-        if label.startswith("REF") and label not in label_to_name:
-            label_to_name[label] = label
-
-    # Build rows
+    # Build per-label rows (Day 1..30 counts + total)
     rows = []
     for label in sorted(labels_set):
         day_counts = []
         total = 0
         for d in padded_days:
-            c = safe_int(d.get("counts", {}).get(label, 0))
+            c = 0
+            if d.get("counts") and label in d["counts"]:
+                c = safe_int(d["counts"][label])
             day_counts.append(c)
             total += c
         rows.append({"label": label, "name": label_to_name.get(label, label), "day_counts": day_counts, "total": total})
 
-    # latest non-empty day index
-    latest_index = max(i for i, d in enumerate(days) if d.get("counts")) if days else 0
+    # latest recorded day index (0-based)
+    latest_index = max(0, len(days) - 1)
 
+    # sort rows for display by that latest day
     rows_sorted_by_latest = sorted(rows, key=lambda r: r["day_counts"][latest_index], reverse=True)
     totals_sorted = sorted(rows, key=lambda r: r["total"], reverse=True)
     day_dates = [d.get("date") for d in padded_days]
 
-    daily_totals = [sum(row["day_counts"][i] for row in rows) for i in range(30)]
+    # ----- NEW: compute daily_totals (Day 1..30 totals) and overall_total -----
+    daily_totals = []
+    for i in range(30):
+        day_sum = sum((row["day_counts"][i] if i < len(row["day_counts"]) else 0) for row in rows)
+        daily_totals.append(day_sum)
     overall_total = sum(daily_totals)
+    # -------------------------------------------------------------------------
 
     return render_template(
         "daily_progress.html",
@@ -1038,7 +1053,7 @@ def daily_progress():
         daily_totals=daily_totals,
         overall_total=overall_total
     )
-    
+
 @app.route("/daily-progress/snapshot", methods=["POST"])
 def daily_progress_snapshot():
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "ContactBatch321!")
