@@ -33,13 +33,9 @@ else:
     TOKEN_FILE = "token.json"
 # ------------------------------------------------------------------------------
 # ---------------------- Prefer Render disk for referrals.json ----------------------
-# If Render mount exists, use it for persistent referrals storage
-if os.path.isdir(RENDER_TOKEN_DIR):
-    REF_FILE = os.path.join(RENDER_TOKEN_DIR, "referrals.json")
-    app.logger.info("Using local REF_FILE on Render disk: %s", REF_FILE)
-else:
-    # fallback to repo-local filename (this is already present in your file, but ensure it's set)
-    REF_FILE = "referrals.json"
+REF_FILE = os.path.join(RENDER_TOKEN_DIR, "referrals.json")
+app.logger.info("Using local REF_FILE on Render disk: %s", REF_FILE)
+
 # -------------------------------------------------------------------------------
 SCOPES = ["https://www.googleapis.com/auth/contacts.readonly"]
 
@@ -435,13 +431,24 @@ def fetch_contacts_and_update():
 
     try:
         service = build("people", "v1", credentials=creds)
-        results = service.people().connections().list(
-            resourceName="people/me",
-            personFields="names,emailAddresses,organizations,biographies,userDefined",
-            pageSize=2000
-        ).execute()
+        
+        # ---------------------- PAGINATED FETCH ----------------------
+        connections = []
+        page_token = None
+        while True:
+            results = service.people().connections().list(
+                resourceName="people/me",
+                personFields="names,emailAddresses,organizations,biographies,userDefined",
+                pageSize=2000,
+                pageToken=page_token
+            ).execute()
+            
+            connections.extend(results.get("connections", []))
+            page_token = results.get("nextPageToken")
+            if not page_token:
+                break
+        # --------------------------------------------------------------
 
-        connections = results.get("connections", []) or []
         users = load_json(DATA_FILE, []) or []
 
         # Prepare groups -> teams structure from registered users (only TEAM registrations)
@@ -475,7 +482,7 @@ def fetch_contacts_and_update():
             combined_clean = re.sub(r"[^\w\s]", "", combined)
             return bool(token_pattern.search(combined_clean))
 
-        # Scan contacts
+        # ---------------------- SCAN CONTACTS ----------------------
         for contact in connections:
             # --- Print the full contact for inspection ---
             print("CONTACT:", contact)  # <--- added line to print all contact data
