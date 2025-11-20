@@ -961,33 +961,23 @@ def migrate_team_links():
     return jsonify({"status": "ok", "updated": changed})
 
 # ---------------------- Daily snapshot display & snapshot endpoint ----------------------
+
+
 @app.route("/daily-progress", methods=["GET"])
 def daily_progress():
-    # Load daily snapshot file
     daily = read_daily_file()
     days = daily.get("days", [])
-
-    # If no days exist, create today's snapshot
     if not days:
         today_snapshot = build_today_snapshot()
         append_daily_snapshot(today_snapshot)
         daily = read_daily_file()
         days = daily.get("days", [])
 
-    # Deduplicate days by date, in case of duplicates
-    unique_days = {}
-    for d in days:
-        date = d.get("date")
-        if date:
-            unique_days[date] = d
-    days = list(unique_days.values())
-
-    # Pad to 30 days for display
-    padded_days = list(days)
+    padded_days = list(days)[:]
     while len(padded_days) < 30:
         padded_days.append({"date": None, "counts": {}})
 
-    # Helper: robust integer conversion
+    # helper: robust int conversion (safe to re-declare here)
     def safe_int(v):
         try:
             return int(v)
@@ -997,13 +987,19 @@ def daily_progress():
             except Exception:
                 return 0
 
-    # Build labels set from actual daily counts
+    refs = load_json(REF_FILE, {})
     labels_set = set()
+    for k in (refs.get("ALL") or {}).keys():
+        try:
+            labels_set.add(f"TEAM{int(k)}")
+        except Exception:
+            labels_set.add(f"TEAM{str(k)}")
+    for k in (refs.get("SOLO") or {}).keys():
+        labels_set.add(str(k))
     for d in days:
         for label in d.get("counts", {}).keys():
             labels_set.add(str(label))
 
-    # Load user names to map labels to display names
     users = load_json(DATA_FILE, []) or []
     label_to_name = {}
     for u in users:
@@ -1030,19 +1026,18 @@ def daily_progress():
     # latest recorded day index (0-based)
     latest_index = max(0, len(days) - 1)
 
-    # sort rows for display by latest day
+    # sort rows for display by that latest day
     rows_sorted_by_latest = sorted(rows, key=lambda r: r["day_counts"][latest_index], reverse=True)
     totals_sorted = sorted(rows, key=lambda r: r["total"], reverse=True)
-
-    # Extract day dates
     day_dates = [d.get("date") for d in padded_days]
 
-    # Compute daily totals and overall total
+    # ----- NEW: compute daily_totals (Day 1..30 totals) and overall_total -----
     daily_totals = []
     for i in range(30):
         day_sum = sum((row["day_counts"][i] if i < len(row["day_counts"]) else 0) for row in rows)
         daily_totals.append(day_sum)
     overall_total = sum(daily_totals)
+    # -------------------------------------------------------------------------
 
     return render_template(
         "daily_progress.html",
@@ -1053,6 +1048,7 @@ def daily_progress():
         daily_totals=daily_totals,
         overall_total=overall_total
     )
+
     
 @app.route("/daily-progress/snapshot", methods=["POST"])
 def daily_progress_snapshot():
