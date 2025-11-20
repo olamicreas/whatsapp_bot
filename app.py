@@ -32,7 +32,15 @@ if os.path.isdir(RENDER_TOKEN_DIR):
 else:
     TOKEN_FILE = "token.json"
 # ------------------------------------------------------------------------------
-
+# ---------------------- Prefer Render disk for referrals.json ----------------------
+# If Render mount exists, use it for persistent referrals storage
+if os.path.isdir(RENDER_TOKEN_DIR):
+    REF_FILE = os.path.join(RENDER_TOKEN_DIR, "referrals.json")
+    app.logger.info("Using local REF_FILE on Render disk: %s", REF_FILE)
+else:
+    # fallback to repo-local filename (this is already present in your file, but ensure it's set)
+    REF_FILE = "referrals.json"
+# -------------------------------------------------------------------------------
 SCOPES = ["https://www.googleapis.com/auth/contacts.readonly"]
 
 UPDATE_INTERVAL = int(os.getenv("UPDATE_INTERVAL", 300))  # seconds
@@ -209,13 +217,36 @@ def push_file_to_github(path, commit_message=None):
         app.logger.warning(f"[GITHUB] Push failed for {path}: {e}")
         return {"error": str(e)}
 
-# ---------------------- Local / GitHub JSON helpers ----------------------
 def load_json(path, default):
     """
-    Try to fetch file from GitHub (if configured). If that fails, use local file.
+    Try to fetch file from GitHub (if configured) *unless* the path is inside
+    the Render-mounted directory (local-first for mounted files).
     Returns parsed JSON (default if can't parse).
     """
-    # Try GitHub first (always read latest from remote if PAT/repo configured)
+    # If the file is stored on the Render-mounted disk, prefer local read/write
+    try:
+        render_dir = os.path.abspath(RENDER_TOKEN_DIR) if 'RENDER_TOKEN_DIR' in globals() else None
+        if render_dir and os.path.isabs(path) and os.path.abspath(path).startswith(render_dir):
+            # local-first for mounted files
+            if not os.path.exists(path):
+                # create empty with default
+                try:
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                    with open(path, "w") as f:
+                        json.dump(default, f)
+                except Exception:
+                    pass
+                return default
+            try:
+                with open(path, "r") as f:
+                    return json.load(f)
+            except Exception:
+                return default
+    except Exception:
+        # fallthrough to normal behavior
+        pass
+
+    # Normal behavior: try GitHub first (when configured), then fallback to local file
     if GITHUB_TOKEN and GITHUB_REPO:
         try:
             content_bytes = _github_get_file_content(GITHUB_REPO, path, branch=GITHUB_BRANCH)
@@ -246,15 +277,32 @@ def load_json(path, default):
 def save_json(path, data, push_to_github=True):
     """
     Save JSON locally and optionally push to GitHub.
-    Supports DATA_FILE, REF_FILE and DAILY_FILE when push_to_github=True.
+    Files under the Render mount are saved locally and NOT pushed to GitHub.
     """
     try:
+        # Ensure parent dir exists
+        parent = os.path.dirname(path)
+        if parent and not os.path.exists(parent):
+            try:
+                os.makedirs(parent, exist_ok=True)
+            except Exception:
+                pass
         with open(path, "w") as f:
             json.dump(data, f, indent=4)
     except Exception as e:
         app.logger.error(f"[ERROR] Failed writing {path}: {e}")
         raise
 
+    # If file is on Render disk (mounted dir), do not push to GitHub
+    try:
+        render_dir = os.path.abspath(RENDER_TOKEN_DIR) if 'RENDER_TOKEN_DIR' in globals() else None
+        if render_dir and os.path.isabs(path) and os.path.abspath(path).startswith(render_dir):
+            app.logger.info("Saved %s locally on Render disk, skipping GitHub push.", path)
+            return {"saved_local": True, "skipped_github": True}
+    except Exception:
+        pass
+
+    # Otherwise, follow original push logic (only push if explicitly configured)
     if push_to_github and GITHUB_TOKEN and GITHUB_REPO and path in (DATA_FILE, REF_FILE, DAILY_FILE):
         try:
             res = push_file_to_github(path, commit_message=f"Auto-update {path}")
