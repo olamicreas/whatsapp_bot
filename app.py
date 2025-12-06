@@ -7,11 +7,12 @@ import re
 import base64
 import requests
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort, send_from_directory
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
+
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "super_secret_key")
@@ -1063,6 +1064,19 @@ def daily_progress_snapshot():
     snapshot = build_today_snapshot()
     ok, reason = append_daily_snapshot(snapshot)
     return jsonify({"ok": ok, "reason": reason, "date": snapshot["date"]})
+
+
+@app.route("/download/<filename>")
+def download_file(filename):
+    allowed = {"data.json", "referrals.json", "daily_refs.json"}
+    if filename not in allowed:
+        return "Not allowed", 403
+    
+    return send_from_directory(
+        "/var/data",
+        filename,
+        as_attachment=True
+    )
 
 # ---------------------- Start ----------------------
 if __name__ == "__main__":
